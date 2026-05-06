@@ -84,12 +84,24 @@ SIGNAL is predictive. It reads public complaint data early, surfaces emerging de
 
 ---
 
-### Phase 3 — Consumer Products (Day 180 → Day 270)
-**Goal:** Expand beyond automotive
+### Phase 3 — Legal Signals + Consumer Products (Day 180 → Day 270)
+**Goal:** Add a litigation-signal layer to sharpen "did the manufacturer know?" — and expand beyond automotive.
 
+**Legal data layer (sharpen what we already have):**
+- **TSB cross-referencing** — every TSB zip is already on disk in `data/raw/`. When a manufacturer issues a TSB on a defect but no recall, AND complaints are rising, that's the smoking-gun pattern every mass tort hinges on. Add a `tsb_known` flag to each cluster and a TSB-without-recall scoring escalator.
+- **PACER / CourtListener integration** — pull early-stage federal product-liability filings by manufacturer/component to detect when other firms are starting to nibble (pre-MDL window). Use CourtListener's free RECAP-cached docs first; fall back to PACER for the rest.
+- **JPML watchlist** — RSS-poll pending motions to consolidate (Multidistrict Litigation panel). Once a motion is pending, the case is publicly known but most firms aren't watching the JPML docket.
+- **State court docket monitoring** — re:SearchTX for Texas filings (priority — our forum); LexisNexis CourtLink for nationwide coverage.
+- **CAFA notices** — settlements over $5M trigger AG notification; useful as lagging confirmation that a pattern materialized.
+
+**Consumer products:**
 - CPSC SaferProducts.gov data pipeline
 - Same scoring architecture applied to consumer products
 - Separate dashboard section for non-vehicle defects
+
+**Lower priority for this phase:** IIHS crash data, EPA enforcement actions, SEC 10-K litigation disclosures.
+
+**Evaluate (don't adopt as core):** [LearningCircuit/local-deep-research](https://github.com/LearningCircuit/local-deep-research) — open-source AI research agent (LangGraph + multi-engine search, MIT licensed, 5.5K stars, very active). **Not a fit for the core SIGNAL pipeline** because (a) most of its integrated sources are academic (arXiv, PubMed) which is the wrong domain, (b) it adds heavyweight framework dependencies (LangGraph, multiple LLM clients, SQLCipher) when our viability-memo flow is intentionally a tight Claude prompt, and (c) SIGNAL needs *targeted* legal feeds (PACER, JPML, TSBs), not general web research. **Where it could earn a place:** as an optional "deep dive" button on a HOT cluster — Jim clicks once on a high-priority cluster, the agent runs an adaptive research pass across web/news/court records and produces a richer briefing PDF. Bolt-on, not embedded.
 
 ---
 
