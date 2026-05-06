@@ -1,0 +1,35 @@
+{% if not q %}
+<div class="px-4 py-8 text-center text-xs text-zinc-500">
+  Type to search across <span class="text-zinc-300">make</span>, <span class="text-zinc-300">model</span>, or <span class="text-zinc-300">component</span>.
+  <div class="mt-3 text-[10px] uppercase tracking-wider text-zinc-600">
+    <kbd class="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-300 font-mono normal-case">↑↓</kbd> nav
+    <kbd class="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-300 font-mono normal-case ml-2">↵</kbd> open
+    <kbd class="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-300 font-mono normal-case ml-2">Esc</kbd> close
+  </div>
+</div>
+{% elif results %}
+{% set palette = {'CRITICAL':'rose-400','HOT':'orange-400','WATCH':'amber-400','MONITOR':'emerald-400','NOISE':'zinc-500'} %}
+<ul class="divide-y divide-zinc-800/70">
+{% for r in results %}
+  <li>
+    <a href="#" onclick="event.preventDefault(); openClusterFromPalette({{ r.id }}); return false;"
+       data-palette-result data-cluster-id="{{ r.id }}"
+       class="palette-result flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/60 transition cursor-pointer">
+      <span class="inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wider uppercase text-{{ palette[r.classification] }} w-20">
+        <span class="w-1.5 h-1.5 rounded-full bg-{{ palette[r.classification] }}"></span>{{ r.classification }}
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-zinc-100 truncate">
+          {% if r.model_year %}{{ r.model_year }}{% else %}<span class="text-zinc-500">multi-yr</span>{% endif %}
+          {{ r.make|title }} {{ r.model|title }}
+          <span class="text-zinc-500"> · {{ r.component }}</span>
+        </div>
+      </div>
+      <span class="num text-xs text-zinc-400">{{ "{:,}".format(r.complaint_count) }} <span class="text-zinc-600">·</span> {{ r.score }}</span>
+    </a>
+  </li>
+{% endfor %}
+</ul>
+{% else %}
+<div class="px-4 py-8 text-center text-xs text-zinc-500">No matches for "<span class="text-zinc-300">{{ q }}</span>".</div>
+{% endif %}

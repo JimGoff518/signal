@@ -1,0 +1,121 @@
+{# Cluster detail rendered as a slide-in side panel. Compact layout. #}
+{% set palette = {
+  'CRITICAL': ('rose-400', 'bg-rose-500'),
+  'HOT': ('orange-400', 'bg-orange-500'),
+  'WATCH': ('amber-400', 'bg-amber-500'),
+  'MONITOR': ('emerald-400', 'bg-emerald-500'),
+  'NOISE': ('zinc-500', 'bg-zinc-500'),
+} %}
+{% set color = palette.get(cluster.classification, palette['NOISE']) %}
+{% set vehicle = ((cluster.model_year ~ ' ') if cluster.model_year else 'multi-year ') ~ cluster.make|title ~ ' ' ~ cluster.model|title %}
+
+<div class="flex flex-col h-full" id="panel-content">
+  <!-- Header -->
+  <div class="px-5 py-4 border-b border-zinc-800 flex items-start justify-between gap-3 flex-shrink-0">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="inline-flex items-center gap-1.5 text-[11px] font-medium tracking-wider uppercase text-{{ color[0] }}">
+          <span class="w-1.5 h-1.5 rounded-full bg-{{ color[0] }}"></span>{{ cluster.classification }}
+        </span>
+        <span class="text-zinc-600">·</span>
+        <span class="text-xs text-zinc-400 num">Score {{ cluster.score }}</span>
+        {% if cluster.recall_issued %}<span class="text-[10px] text-amber-400 ring-1 ring-amber-500/30 px-1 rounded uppercase tracking-wider">recall</span>{% endif %}
+        {% if cluster.nhtsa_investigation_open %}<span class="text-[10px] text-orange-400 ring-1 ring-orange-500/30 px-1 rounded uppercase tracking-wider">probe</span>{% endif %}
+      </div>
+      <h2 class="text-xl font-semibold tracking-tight text-zinc-100 truncate">{{ vehicle }}</h2>
+      <p class="text-sm text-zinc-400 mt-0.5">{{ cluster.component }}</p>
+    </div>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <a href="/cluster/{{ cluster.id }}" target="_blank" rel="noopener" class="text-xs text-zinc-500 hover:text-zinc-200 transition" title="Open full page">↗</a>
+      <button onclick="closePanel()" class="text-zinc-500 hover:text-zinc-100 transition w-7 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-800" title="Close (Esc)">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Scrolling body -->
+  <div class="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+    <!-- Stats grid -->
+    <div class="grid grid-cols-3 gap-2">
+      {% set stats = [
+        ('Complaints', cluster.complaint_count, 'text-zinc-100'),
+        ('Injuries', cluster.injury_count, 'text-rose-300' if cluster.injury_count else 'text-zinc-600'),
+        ('Deaths', cluster.death_count, 'text-rose-400' if cluster.death_count else 'text-zinc-600'),
+        ('Crashes', cluster.crash_count, 'text-zinc-300'),
+        ('Fires', cluster.fire_count, 'text-zinc-300' if cluster.fire_count else 'text-zinc-600'),
+        ('Δ 30 days', cluster.velocity_30d, 'text-zinc-300'),
+      ] %}
+      {% for label, val, c in stats %}
+      <div class="bg-zinc-900/50 border border-zinc-800 rounded-lg p-2.5">
+        <div class="text-[10px] uppercase tracking-wider text-zinc-500">{{ label }}</div>
+        <div class="text-lg font-semibold mt-0.5 num {{ c }}">{{ "{:,}".format(val) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Span + states -->
+    <div class="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3 text-sm">
+      <div class="flex justify-between mb-1">
+        <span class="text-zinc-500 text-xs">First filed</span>
+        <span class="num">{{ cluster.first_complaint_date or "—" }}</span>
+      </div>
+      <div class="flex justify-between mb-2">
+        <span class="text-zinc-500 text-xs">Last filed</span>
+        <span class="num">{{ cluster.last_complaint_date or "—" }}</span>
+      </div>
+      <div class="text-zinc-500 text-xs mt-3 mb-1">States ({{ states|length }})</div>
+      <div class="text-zinc-300 text-xs leading-relaxed">{{ states|join(", ") if states else "—" }}</div>
+    </div>
+
+    <!-- Volume -->
+    {% if volume %}
+    <div class="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3">
+      <div class="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Complaints / month — last 24</div>
+      {% set max_n = volume|map(attribute='n')|max %}
+      <div class="flex items-end gap-px h-16">
+        {% for row in volume %}
+          {% set h = (row.n / max_n * 100) if max_n else 0 %}
+          <div class="flex-1 {{ color[1] }}/40 hover:{{ color[1] }} rounded-sm transition" style="height: {{ h }}%; min-height: {% if row.n > 0 %}2px{% else %}0{% endif %};" title="{{ row.month }} — {{ row.n }}"></div>
+        {% endfor %}
+      </div>
+      <div class="flex justify-between text-[10px] text-zinc-500 mt-1.5 num">
+        <span>{{ volume[0].month.strftime("%b %Y") }}</span>
+        <span>{{ volume[-1].month.strftime("%b %Y") }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Memo -->
+    {% include "_memo_card.html" %}
+
+    <!-- Complaints (first page only in panel) -->
+    <div class="bg-zinc-900/50 border border-zinc-800 rounded-lg overflow-hidden">
+      <div class="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
+        <span class="text-[10px] uppercase tracking-wider text-zinc-500">Recent complaints</span>
+        <a href="/cluster/{{ cluster.id }}" target="_blank" class="text-[11px] text-zinc-500 hover:text-zinc-200 transition">view all {{ "{:,}".format(total_complaints) }} ↗</a>
+      </div>
+      <div class="divide-y divide-zinc-900">
+        {% for c in complaints[:8] %}
+        <details class="group">
+          <summary class="cursor-pointer px-3 py-2.5 hover:bg-zinc-900/40 transition list-none">
+            <div class="flex items-center gap-2 text-xs mb-1">
+              <span class="num text-zinc-400">{{ c.date_complaint_filed or "—" }}</span>
+              <span class="text-zinc-600">·</span>
+              <span class="text-zinc-300">{{ c.state or "—" }}</span>
+              {% if c.crash %}<span class="text-rose-400 text-[10px] uppercase tracking-wider">crash</span>{% endif %}
+              {% if c.deaths > 0 %}<span class="text-rose-400 text-[10px] uppercase tracking-wider font-semibold">death</span>{% endif %}
+              {% if c.injuries > 0 %}<span class="text-rose-300 text-[10px] uppercase tracking-wider">{{ c.injuries }} inj</span>{% endif %}
+            </div>
+            <div class="text-sm text-zinc-300 leading-snug line-clamp-2">{{ c.description or "(no narrative)" }}</div>
+          </summary>
+          {% if c.description and c.description|length > 200 %}
+          <div class="px-3 pb-3 text-sm text-zinc-400 leading-relaxed">{{ c.description }}</div>
+          {% endif %}
+        </details>
+        {% else %}
+        <div class="px-3 py-6 text-center text-xs text-zinc-500">No complaints to show.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>

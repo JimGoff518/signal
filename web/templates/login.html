@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="min-h-[70vh] flex items-center justify-center">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="flex items-center justify-center gap-2 text-2xl font-semibold tracking-tight mb-1">
+        <span class="inline-block w-3 h-3 rounded-full bg-rose-500"></span>
+        SIGNAL
+      </div>
+      <p class="text-sm text-zinc-500">Mass tort early warning system · Goff Law PLLC</p>
+    </div>
+
+    <form method="post" action="/login" class="space-y-4 bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+      <div>
+        <label class="block text-sm text-zinc-400 mb-1.5" for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username"
+               class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-600" required />
+      </div>
+      <div>
+        <label class="block text-sm text-zinc-400 mb-1.5" for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password"
+               class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-600" required />
+      </div>
+      {% if error %}
+      <div class="text-sm text-rose-400">Invalid credentials. Try again.</div>
+      {% endif %}
+      <button type="submit"
+              class="w-full bg-zinc-100 text-zinc-900 hover:bg-white transition rounded-lg py-2 text-sm font-medium">
+        Sign in
+      </button>
+    </form>
+
+    <p class="text-xs text-zinc-600 text-center mt-6">Confidential — authorized users only</p>
+  </div>
+</div>
+{% endblock %}

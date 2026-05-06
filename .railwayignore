@@ -1,0 +1,40 @@
+# Files Railway should NOT upload during `railway up`.
+# (Same intent as .dockerignore but applied earlier — at upload time.)
+
+.venv/
+.git/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local logs
+*.log
+
+# Local DB dump
+signal.dump
+
+# Bulky raw NHTSA dumps — the importer downloads what it needs at runtime
+FLAT_CMPL.zip
+FLAT_RCL_POST_2010.zip
+FLAT_INV.zip
+TSBS_RECEIVED_2025-2026.zip
+*.pdf
+Safercar_data*.csv
+SGO-2021-01_*
+crawl4ai-main*.zip
+
+# Vendored crawl4ai isn't used in Phase 1 — skip to keep upload tiny
+vendor/
+
+# Local DB volume isn't part of the source
+docker-compose.yml
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets — Railway has its own variable store
+.env
+.env.*
+!.env.example

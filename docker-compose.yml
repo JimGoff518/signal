@@ -1,0 +1,29 @@
+# Local dev infrastructure for SIGNAL.
+# Production runs on Supabase or Railway Postgres — this is for local work.
+#
+#   docker compose up -d        # start Postgres in the background
+#   docker compose down         # stop (data persists in the volume)
+#   docker compose down -v      # stop AND wipe data
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: signal-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: signal
+      POSTGRES_PASSWORD: signal
+      POSTGRES_DB: signal
+    ports:
+      - "5432:5432"
+    volumes:
+      - signal_pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U signal -d signal"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  signal_pgdata:

@@ -1,0 +1,40 @@
+# Don't ship local-only stuff into the Railway image.
+.venv/
+.git/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local DB / log artifacts
+streamlit.log
+streamlit.err.log
+historical_import.log
+*.log
+
+# Bulky raw NHTSA dumps — not needed inside the container; the importer
+# downloads what it needs at runtime.
+FLAT_CMPL.zip
+FLAT_RCL_POST_2010.zip
+FLAT_INV.zip
+TSBS_RECEIVED_2025-2026.zip
+*.pdf
+Safercar_data*.csv
+SGO-2021-01_*
+crawl4ai-main*.zip
+
+# Vendored crawl4ai source isn't used in Phase 1; skip to keep image small.
+vendor/
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets — Railway has its own variable store
+.env
+.env.*
+!.env.example

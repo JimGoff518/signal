@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% set badge = CLASSIFICATION_BADGE.get(cluster.classification) %}
+{% set vehicle = (cluster.model_year ~ ' ' if cluster.model_year else 'multi-year ') ~ cluster.make|title ~ ' ' ~ cluster.model|title %}
+
+{% block content %}
+<a href="javascript:history.back()" class="text-sm text-zinc-400 hover:text-zinc-100 inline-flex items-center gap-1.5 mb-4 transition">
+  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m0 0l7 7m-7-7l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  Back
+</a>
+
+<!-- Header -->
+<div class="mb-8">
+  <div class="flex items-center gap-3 mb-2">
+    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium tracking-wide uppercase ring-1 ring-inset {{ badge[1] if badge else '' }}">
+      <span class="w-1.5 h-1.5 rounded-full mr-1.5 {% if cluster.classification=='CRITICAL' %}bg-rose-400{% elif cluster.classification=='HOT' %}bg-orange-400{% elif cluster.classification=='WATCH' %}bg-amber-400{% elif cluster.classification=='MONITOR' %}bg-emerald-400{% else %}bg-zinc-400{% endif %}"></span>
+      {{ cluster.classification }}
+    </span>
+    <span class="text-sm text-zinc-500 num">Score {{ cluster.score }}/100</span>
+    {% if cluster.recall_issued %}<span class="text-xs text-amber-400 ring-1 ring-amber-500/30 px-1.5 py-0.5 rounded">RECALL ISSUED</span>{% endif %}
+    {% if cluster.nhtsa_investigation_open %}<span class="text-xs text-orange-400 ring-1 ring-orange-500/30 px-1.5 py-0.5 rounded">NHTSA PROBE OPEN</span>{% endif %}
+  </div>
+  <h1 class="text-3xl font-semibold tracking-tight">{{ vehicle }}</h1>
+  <p class="text-zinc-400 mt-1">{{ cluster.component }}</p>
+</div>
+
+<!-- Stats grid -->
+<div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+  {% set stats = [
+    ('Complaints', cluster.complaint_count, 'text-zinc-100'),
+    ('Injuries', cluster.injury_count, 'text-rose-300' if cluster.injury_count else 'text-zinc-500'),
+    ('Deaths', cluster.death_count, 'text-rose-400' if cluster.death_count else 'text-zinc-500'),
+    ('Crashes', cluster.crash_count, 'text-zinc-300'),
+    ('Fires', cluster.fire_count, 'text-zinc-300'),
+    ('Δ 30 days', cluster.velocity_30d, 'text-zinc-300'),
+  ] %}
+  {% for label, val, color in stats %}
+  <div class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-3">
+    <div class="text-xs uppercase tracking-wide text-zinc-500">{{ label }}</div>
+    <div class="text-2xl font-semibold mt-1 num {{ color }}">{{ "{:,}".format(val) if val is number else val }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+  <!-- States + dates side panel -->
+  <div class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
+    <div class="text-xs uppercase tracking-wide text-zinc-500 mb-2">Span</div>
+    <div class="text-sm text-zinc-300">
+      First: <span class="text-zinc-100">{{ cluster.first_complaint_date or "—" }}</span><br/>
+      Last: <span class="text-zinc-100">{{ cluster.last_complaint_date or "—" }}</span>
+    </div>
+    <div class="text-xs uppercase tracking-wide text-zinc-500 mt-4 mb-2">States ({{ states|length }})</div>
+    <div class="text-sm text-zinc-300 leading-relaxed">
+      {% if states %}
+        {{ states|join(", ") }}
+      {% else %}
+        <span class="text-zinc-500">—</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Volume chart -->
+  <div class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 lg:col-span-2">
+    <div class="text-xs uppercase tracking-wide text-zinc-500 mb-3">Complaints per month (last 24)</div>
+    {% if volume %}
+      {% set max_n = volume|map(attribute='n')|max %}
+      <div class="flex items-end gap-1 h-32">
+        {% for row in volume %}
+          {% set h = (row.n / max_n * 100) if max_n else 0 %}
+          <div class="flex-1 flex flex-col items-center gap-1 group" title="{{ row.month }} — {{ row.n }}">
+            <div class="w-full bg-zinc-700 group-hover:bg-rose-500 transition rounded-sm" style="height: {{ h }}%; min-height: 2px;"></div>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="flex justify-between text-xs text-zinc-500 mt-2 num">
+        <span>{{ volume[0].month.strftime("%b %Y") if volume }}</span>
+        <span>{{ volume[-1].month.strftime("%b %Y") if volume }}</span>
+      </div>
+    {% else %}
+      <div class="text-sm text-zinc-500">No data in window.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Viability memo card (HTMX swappable) -->
+<div id="memo-card">
+  {% include "_memo_card.html" %}
+</div>
+
+<!-- Raw complaints -->
+<div class="bg-zinc-900/40 border border-zinc-800 rounded-xl overflow-hidden mt-8">
+  <div class="px-4 py-3 border-b border-zinc-800 text-xs text-zinc-500 flex items-center justify-between">
+    <span>Raw complaints — {{ "{:,}".format(total_complaints) }} total</span>
+    <span>page {{ page }} of {{ last_page }}</span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="text-xs text-zinc-500 uppercase tracking-wide bg-zinc-900/40">
+        <tr>
+          <th class="text-left px-4 py-2.5 font-medium">Filed</th>
+          <th class="text-left px-4 py-2.5 font-medium">State</th>
+          <th class="text-center px-4 py-2.5 font-medium">Crash</th>
+          <th class="text-right px-4 py-2.5 font-medium">Inj</th>
+          <th class="text-right px-4 py-2.5 font-medium">Dth</th>
+          <th class="text-left px-4 py-2.5 font-medium">Description</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-zinc-800/70">
+        {% for c in complaints %}
+        <tr class="align-top">
+          <td class="px-4 py-3 num text-zinc-400 whitespace-nowrap">{{ c.date_complaint_filed or "—" }}</td>
+          <td class="px-4 py-3 text-zinc-300">{{ c.state or "—" }}</td>
+          <td class="px-4 py-3 text-center text-zinc-400">{% if c.crash %}<span class="text-rose-400">●</span>{% else %}<span class="text-zinc-700">●</span>{% endif %}</td>
+          <td class="px-4 py-3 text-right num {% if c.injuries %}text-rose-300{% else %}text-zinc-600{% endif %}">{{ c.injuries }}</td>
+          <td class="px-4 py-3 text-right num {% if c.deaths %}text-rose-400 font-medium{% else %}text-zinc-600{% endif %}">{{ c.deaths }}</td>
+          <td class="px-4 py-3 text-zinc-300 max-w-2xl">
+            <details class="group">
+              <summary class="cursor-pointer list-none">
+                {{ (c.description or "")[:240] }}{% if c.description and c.description|length > 240 %}…{% endif %}
+              </summary>
+              {% if c.description and c.description|length > 240 %}
+              <div class="text-zinc-400 mt-2 text-xs leading-relaxed">{{ c.description }}</div>
+              {% endif %}
+            </details>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="px-4 py-12 text-center text-zinc-500">No complaints found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if last_page > 1 %}
+  <div class="px-4 py-3 border-t border-zinc-800 flex justify-between items-center text-sm">
+    {% if page > 1 %}
+      <a href="?page={{ page - 1 }}" class="text-zinc-400 hover:text-zinc-100 transition">← Previous</a>
+    {% else %}
+      <span class="text-zinc-600">← Previous</span>
+    {% endif %}
+    <span class="text-zinc-500">{{ page }} / {{ last_page }}</span>
+    {% if page < last_page %}
+      <a href="?page={{ page + 1 }}" class="text-zinc-400 hover:text-zinc-100 transition">Next →</a>
+    {% else %}
+      <span class="text-zinc-600">Next →</span>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
