@@ -28,6 +28,8 @@ from signalwarn.historical import (  # noqa: E402
     apply_investigation_flags,
     apply_recall_flags,
     download_complaints_flat_file,
+    download_investigations_flat_file,
+    download_recalls_flat_file,
     import_complaints,
     rescore_all_clusters,
 )
@@ -66,6 +68,11 @@ def main(
     skip_recalls: bool,
     skip_investigations: bool,
 ) -> None:
+    # Force line-buffered stdout so progress lines flush immediately when
+    # output is redirected to a file (e.g. `nohup ... > /tmp/log` inside a
+    # Railway container). Default block-buffering hides progress for minutes.
+    sys.stdout.reconfigure(line_buffering=True)
+
     logging.basicConfig(
         level=settings.log_level,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -80,18 +87,14 @@ def main(
         log.info("Skipping complaints (per --skip-complaints)")
 
     if not skip_recalls:
-        if not recalls.exists():
-            log.warning("Recalls file missing: %s — skipping", recalls)
-        else:
-            n = apply_recall_flags(recalls)
-            log.info("Recall flags set on %s clusters", n)
+        recalls_path = download_recalls_flat_file(recalls)
+        n = apply_recall_flags(recalls_path)
+        log.info("Recall flags set on %s clusters", n)
 
     if not skip_investigations:
-        if not investigations.exists():
-            log.warning("Investigations file missing: %s — skipping", investigations)
-        else:
-            n = apply_investigation_flags(investigations)
-            log.info("Investigation flags set on %s clusters", n)
+        inv_path = download_investigations_flat_file(investigations)
+        n = apply_investigation_flags(inv_path)
+        log.info("Investigation flags set on %s clusters", n)
 
     log.info("Final rescore pass…")
     n = rescore_all_clusters()

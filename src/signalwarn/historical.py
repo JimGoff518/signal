@@ -26,6 +26,8 @@ from signalwarn.normalize import normalize_component
 log = logging.getLogger(__name__)
 
 CMPL_URL = "https://static.nhtsa.gov/odi/ffdd/cmpl/FLAT_CMPL.zip"
+RCL_URL = "https://static.nhtsa.gov/odi/ffdd/rcl/FLAT_RCL_POST_2010.zip"
+INV_URL = "https://static.nhtsa.gov/odi/ffdd/inv/FLAT_INV.zip"
 EARLIEST_YEAR = 2015  # spec §4.4: load 2015–present
 INSERT_BATCH = 5000
 
@@ -44,16 +46,31 @@ def _is_tracked(tracked: dict[str, set[str]], make: str, model: str) -> bool:
     return any(m_upper == m or m_upper.startswith(m + " ") for m in models)
 
 
-def download_complaints_flat_file(dest: Path) -> Path:
-    """Download FLAT_CMPL.zip from NHTSA if it's not already present."""
+def _download_if_missing(url: str, dest: Path, label: str) -> Path:
+    """Fetch `url` to `dest` unless `dest` already exists. Idempotent."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
-        log.info("FLAT_CMPL.zip already present at %s — skipping download", dest)
+        log.info("%s already present at %s — skipping download", dest.name, dest)
         return dest
-    log.info("Downloading %s → %s (this is a few hundred MB)…", CMPL_URL, dest)
-    urllib.request.urlretrieve(CMPL_URL, dest)  # noqa: S310 — known NHTSA URL
+    log.info("Downloading %s → %s (%s)…", url, dest, label)
+    urllib.request.urlretrieve(url, dest)  # noqa: S310 — known NHTSA URL
     log.info("Downloaded %s bytes", dest.stat().st_size)
     return dest
+
+
+def download_complaints_flat_file(dest: Path) -> Path:
+    """Download FLAT_CMPL.zip from NHTSA if it's not already present."""
+    return _download_if_missing(CMPL_URL, dest, "a few hundred MB")
+
+
+def download_recalls_flat_file(dest: Path) -> Path:
+    """Download FLAT_RCL_POST_2010.zip from NHTSA if it's not already present."""
+    return _download_if_missing(RCL_URL, dest, "~14 MB")
+
+
+def download_investigations_flat_file(dest: Path) -> Path:
+    """Download FLAT_INV.zip from NHTSA if it's not already present."""
+    return _download_if_missing(INV_URL, dest, "~4 MB")
 
 
 # ─── Complaints ─────────────────────────────────────────────────────────
@@ -90,7 +107,7 @@ def import_complaints(complaints_path: Path) -> tuple[int, int]:
                 inserted += _flush_complaint_batch(conn, batch, cluster_jobs)
                 batch.clear()
                 cluster_jobs.clear()
-                if inserted % 50000 == 0:
+                if inserted % 5000 == 0:
                     log.info("  …%s complaints inserted so far", inserted)
 
         if batch:
