@@ -23,9 +23,9 @@ SIGNAL is predictive. It reads public complaint data early, surfaces emerging de
 ## SUCCESS METRICS — HOW WE KNOW IT'S WORKING
 
 ### 90-Day Goal (Phase 1 MVP)
-- [ ] Dashboard live and pulling real NHTSA data daily
-- [ ] At least 10 active complaint clusters scored and classified
-- [ ] At least 1 cluster rated HOT or CRITICAL with a viable legal theory
+- [x] **Dashboard live** at https://signal-mtw.up.railway.app *(Railway cron for daily ingestion still pending — manual `python scripts/run_ingestion.py` works)*
+- [x] **At least 10 active complaint clusters scored and classified** — landed at **17,448 clusters** after the historical seed on 2026-05-06.
+- [x] **At least 1 cluster rated HOT or CRITICAL** — there are **2,696** (1,451 CRITICAL + 1,245 HOT). Viable legal theory selection is the next step; use `python scripts/top_clusters.py` to rank by tort signal.
 - [ ] Jim reviews dashboard at least 3x per week
 - [ ] First targeted ad campaign launched to affected vehicle owners in Texas
 

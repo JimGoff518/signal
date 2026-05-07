@@ -1,0 +1,84 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this project is
+
+SIGNAL is a mass tort early warning system for Goff Law PLLC. It pulls NHTSA vehicle complaint data, clusters defects by make/model/year/component, scores each cluster 0-100, generates Anthropic-powered viability memos for high-scoring clusters, and emails daily digests + instant death alerts. Phase 1 MVP, currently in production. The full business + algorithmic context lives in [docs/SIGNAL_README.md](docs/SIGNAL_README.md), [docs/SIGNAL_TECHNICAL_SPEC.md](docs/SIGNAL_TECHNICAL_SPEC.md), and [docs/SIGNAL_PLAN_AND_GOALS.md](docs/SIGNAL_PLAN_AND_GOALS.md) — read those if anything in code feels arbitrary; the *why* lives there.
+
+## Common commands
+
+Use the project venv's Python (`.venv/Scripts/python.exe` on Windows, `.venv/bin/python` on POSIX) for all Python invocations so you stay on the pinned interpreter.
+
+| Task | Command |
+|---|---|
+| Run all tests | `.venv/Scripts/python.exe -m pytest` |
+| Run one test file | `.venv/Scripts/python.exe -m pytest tests/test_scoring.py` |
+| Run one test | `.venv/Scripts/python.exe -m pytest tests/test_scoring.py::test_compute_score_basic` |
+| Tests with coverage | `.venv/Scripts/python.exe -m pytest --cov=signalwarn --cov=web` |
+| Lint | `.venv/Scripts/python.exe -m ruff check .` (config in `pyproject.toml`) |
+| Format | `.venv/Scripts/python.exe -m ruff format .` |
+| FastAPI dev server | `.venv/Scripts/python.exe -m uvicorn web.app:app --reload --port 8080` |
+| Streamlit dev server (legacy) | `.venv/Scripts/python.exe -m streamlit run src/signalwarn/app.py` |
+| Daily ingest (one-off) | `.venv/Scripts/python.exe scripts/run_ingestion.py` |
+| Bulk historical seed | `.venv/Scripts/python.exe scripts/historical_import.py` |
+| Mirror NHTSA datasets | `.venv/Scripts/python.exe scripts/download_nhtsa_datasets.py` |
+| Local Postgres up/down | `docker compose up -d` / `docker compose down -v` |
+
+There is no separate "build" step — `pip install -e .` makes `signalwarn` importable across the project.
+
+## Architecture (the big picture)
+
+**One pipeline, two front-ends.** The data pipeline is the product; the dashboards are read-only views over the cluster table.
+
+```
+NHTSA API/flatfiles ──▶ ingestion ──▶ complaints (table)
+                                          │
+                                          ▼
+                                     clustering ──▶ clusters (table)
+                                          │
+                                          ▼
+                                       scoring ──▶ score + classification on cluster row
+                                          │
+                                          ▼
+                            (score >= 50)  viability memo (Claude) ──▶ stored on cluster row
+                                          │
+                                          ▼
+                                        alerts (Resend) — daily digest + death alert
+```
+
+The pipeline is invoked two ways:
+- **`scripts/historical_import.py`** — one-shot bulk seed from NHTSA flat-file zips (FLAT_CMPL.zip auto-downloads; FLAT_RCL/FLAT_INV optional from repo root). Skip flags: `--skip-complaints`, `--skip-recalls`, `--skip-investigations`. Run once on initial deploy.
+- **`scripts/run_ingestion.py`** — daily delta. Pulls last N days (`NHTSA_LOOKBACK_DAYS`, default 7) per tracked vehicle via the live API, then re-clusters, re-scores, regenerates memos for newly-WATCH+ clusters, and sends alerts. Designed to run on a Railway cron at 02:00 CT (not yet wired up as of this writing).
+
+**Cluster model.** Every complaint joins **two** clusters: a per-year cluster (`{MAKE}::{MODEL}::{YEAR}::{COMPONENT}`) and a cross-year aggregate (`{MAKE}::{MODEL}::ALL_YEARS::{COMPONENT}`, with `model_year=NULL` and `is_multi_year=TRUE`). The aggregate gets a +10 multi-year bonus when complaints span multiple years. See [src/signalwarn/clustering.py](src/signalwarn/clustering.py).
+
+**Scoring.** Pure function in [src/signalwarn/scoring.py](src/signalwarn/scoring.py): `ClusterFacts → 0-100 int`. Formula: `min(complaints, 30)` + velocity multiplier (×3 if 30-day count ≥ 0.66 of total, else ×2 if ≥ 0.5) + injury/death/crash/fire/multi-year/investigation/recall escalators, minus 30 if a class action is already filed (we want to be early). Clamped to [0, 100]. The exact thresholds match `docs/SIGNAL_TECHNICAL_SPEC.md §7.2` with one fix in the velocity branch ordering — see the docstring.
+
+**Two front-ends, one DB.** [web/app.py](web/app.py) is the current FastAPI + Jinja + HTMX + Tailwind dashboard. [src/signalwarn/app.py](src/signalwarn/app.py) is the legacy Streamlit app being phased out — make UI changes in `web/`, not Streamlit, unless explicitly asked. Both share `signalwarn.db` and read the same tables.
+
+**DB connection nuance.** [src/signalwarn/db.py](src/signalwarn/db.py) supports both raw psycopg (`connection()` context manager, dict-row cursors, auto-commit on success) and SQLAlchemy (`engine()`, used by Streamlit + pandas). The URL massaging functions handle `postgresql://`, `postgres://` (Heroku), and `postgresql+psycopg://` so callers can pass any form.
+
+**Config.** [src/signalwarn/config.py](src/signalwarn/config.py) is the single source of truth — pydantic-settings reading `.env`. Pinecone vars are *declared* but *unused* (Phase 2). LangSmith tracing is opt-in via `LANGSMITH_TRACING=true`. The single-user login uses `SIGNAL_USERNAME` + `SIGNAL_PASSWORD`; multi-user JSON map via `SIGNAL_USERS={"user":"pass",...}` takes precedence when set.
+
+## Things that bite
+
+- **Tracked vehicles are hardcoded** in [src/signalwarn/ingestion.py](src/signalwarn/ingestion.py) (`TRACKED_VEHICLES`, model years 2015-2025). Adding/removing makes happens here, not in config.
+- **Component normalization** in [src/signalwarn/normalize.py](src/signalwarn/normalize.py) maps NHTSA's free-text component strings to ~15 canonical buckets. The cluster key uses the *normalized* component, so changes to the mapping change cluster identity.
+- **Migrations are unversioned.** Only [migrations/001_initial_schema.sql](migrations/001_initial_schema.sql) exists; there's no migration runner. The Dockerfile and `docker-compose.yml` apply it on first boot. New schema changes need to land in this file *and* in any prod DB by hand — coordinate with Jim before changing schema.
+- **Vendored crawl4ai** lives in [vendor/crawl4ai/](vendor/crawl4ai/) (~30M, intentionally committed to repo, intentionally **excluded** from Railway uploads via `.railwayignore`). It's reserved for Phase 2 (Reddit / CarComplaints scraping); no current code imports it.
+- **Bulk data files in repo root** (`FLAT_CMPL.zip`, `FLAT_RCL_POST_2010.zip`, `FLAT_INV.zip`, `Safercar_data.csv`, etc.) are gitignored and railwayignored — `scripts/historical_import.py` reads from there but `scripts/download_nhtsa_datasets.py` writes new mirrors to `data/raw/`.
+
+## Production (Railway)
+
+- Project: `signal`, environment: `production`, web service: `signal-app` at https://signal-mtw.up.railway.app
+- The Postgres DB Railway provisions for the app uses `postgres.railway.internal` for in-cluster traffic. **That hostname does not resolve from a developer laptop** — running scripts that hit prod requires either (a) `railway ssh` into `signal-app` and running there, or (b) using the *public* Postgres URL from the Railway dashboard in your local `.env`. Plain `railway run` injects the internal URL and will time out trying to connect.
+- Multiple Postgres services exist in the project (`Postgres-LPM7`, `Postgres-D5kM`, etc.) — only the one wired to `signal-app`'s `DATABASE_URL` is live. Don't assume from the names; check the linked variable.
+- Deploy: `railway up` from the repo root. The build uses `Dockerfile` (Python 3.12-slim — note: differs from the local 3.14 venv); `.railwayignore` keeps uploads small by excluding `vendor/`, `*.zip`, and `data/raw/`. Healthcheck path is `/healthz`.
+
+## Operating notes for Claude Code
+
+- The user's harness blocks production-affecting commands (`railway up`, `railway run` against prod DB, `railway ssh`). Tell the user the exact command to run themselves; don't loop trying variants.
+- Don't read `.env` or run `railway variables` — secrets land in transcript.
+- New UI work goes in [web/templates/](web/templates/) (Jinja). The CDN-Tailwind config and the htmx initialiser live in `base.html`.
+- When in doubt about *why* something is shaped a certain way, the SIGNAL_TECHNICAL_SPEC.md is the authoritative source — the code has comments tagged with section numbers (`§7.2`, etc.) that point back to it.
