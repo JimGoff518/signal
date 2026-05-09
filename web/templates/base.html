@@ -19,7 +19,7 @@
     };
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     body { font-feature-settings: 'cv11', 'ss01', 'ss03'; }
     .num { font-variant-numeric: tabular-nums; }
@@ -85,52 +85,6 @@
       50% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 4px rgb(244 63 94 / 0); }
     }
 
-    /* ─── DALLAS DOCKET RETRO MODE — Konami code easter egg ─── */
-    /* Activated by ↑ ↑ ↓ ↓ ← → ← → B A. Hidden by default. */
-    html.retro-mode { image-rendering: pixelated; }
-    html.retro-mode body { position: relative; }
-    html.retro-mode body::before {
-      content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
-      background: repeating-linear-gradient(
-        180deg,
-        rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px,
-        rgba(0,0,0,0.18) 3px, rgba(0,0,0,0) 4px
-      );
-      mix-blend-mode: multiply;
-    }
-    html.retro-mode body::after {
-      content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9998;
-      background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.35) 100%);
-    }
-    html.retro-mode h1,
-    html.retro-mode header a[href="/"],
-    html.retro-mode #ticker-clock,
-    html.retro-mode .num.font-semibold,
-    html.retro-mode .stat-halo-rose .num,
-    html.retro-mode .stat-halo-orange .num,
-    html.retro-mode .stat-halo-amber .num,
-    html.retro-mode .stat-halo-emerald .num {
-      font-family: 'Press Start 2P', monospace !important;
-      letter-spacing: 0.04em;
-      text-shadow: 0 0 6px rgb(244 63 94 / 0.45);
-    }
-    html.retro-mode h1 { font-size: 1.5rem !important; line-height: 2rem; }
-    html.retro-mode header a[href="/"] span:nth-child(2) { font-size: 0.95rem; }
-
-    /* PLAYER 1 READY toast */
-    #retro-toast {
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      z-index: 10000; padding: 1.25rem 2rem; pointer-events: none;
-      font-family: 'Press Start 2P', monospace; font-size: 0.95rem; letter-spacing: 0.08em;
-      color: #fef2f2; background: #18181b; border: 4px solid #f43f5e;
-      box-shadow: 0 0 0 4px #18181b, 0 0 0 8px #f43f5e, 0 0 40px rgb(244 63 94 / 0.5);
-      opacity: 0; transition: opacity 200ms ease;
-    }
-    #retro-toast.show { opacity: 1; animation: retroBlink 0.4s steps(2) 3; }
-    @keyframes retroBlink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
   </style>
   <script>
     // Live clock for the ticker — updates every second.
@@ -154,73 +108,6 @@
       tickClock();
       setInterval(tickClock, 1000);
     });
-
-    // ─── DALLAS DOCKET RETRO MODE — Konami easter egg ───
-    // Press ↑ ↑ ↓ ↓ ← → ← → B A on any page to activate. Persists across nav.
-    // Press again to deactivate.
-    //
-    // Debug from devtools console: window.__signalKonami exposes { idx, seq, on }.
-    (function () {
-      const SEQ = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown',
-                   'ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
-      // Keys we should ignore entirely so they don't break the sequence.
-      const NOISE = new Set(['Shift','Control','Alt','Meta','CapsLock','Tab',
-                             'NumLock','ScrollLock','Escape','Dead']);
-      let idx = 0;
-      function flash(msg) {
-        let el = document.getElementById('retro-toast');
-        if (!el) {
-          el = document.createElement('div');
-          el.id = 'retro-toast';
-          document.body.appendChild(el);
-        }
-        el.textContent = msg;
-        // Force reflow so the animation restarts on repeated activations.
-        el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-        clearTimeout(el._t);
-        el._t = setTimeout(() => el.classList.remove('show'), 2400);
-      }
-      function toggle() {
-        const on = !document.documentElement.classList.contains('retro-mode');
-        document.documentElement.classList.toggle('retro-mode', on);
-        try { localStorage.setItem('signal-retro', on ? '1' : '0'); } catch (e) {}
-        flash(on ? 'PLAYER 1 READY' : 'GAME OVER');
-      }
-      try {
-        if (localStorage.getItem('signal-retro') === '1') {
-          document.documentElement.classList.add('retro-mode');
-        }
-      } catch (e) {}
-      // Expose for console debugging — Jim can run window.__signalKonami in devtools.
-      window.__signalKonami = {
-        get idx() { return idx; },
-        seq: SEQ,
-        get on() { return document.documentElement.classList.contains('retro-mode'); },
-        toggle,
-        reset() { idx = 0; },
-      };
-      window.addEventListener('keydown', (e) => {
-        // Don't capture keys while typing in inputs.
-        const t = e.target;
-        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-        // Drop keyboard auto-repeat — held keys would bury the sequence.
-        if (e.repeat) return;
-        const raw = e.key;
-        // Skip modifier / dead keys so a stray Shift doesn't break the streak.
-        if (NOISE.has(raw)) return;
-        const key = raw.length === 1 ? raw.toLowerCase() : raw;
-        if (key === SEQ[idx]) {
-          idx++;
-          if (idx === SEQ.length) {
-            idx = 0;
-            toggle();
-          }
-        } else {
-          // Mismatch — restart, but if this key matches SEQ[0] start a new attempt.
-          idx = (key === SEQ[0]) ? 1 : 0;
-        }
-      });
-    })();
   </script>
 </head>
 <body class="min-h-screen antialiased">
