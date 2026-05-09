@@ -127,6 +127,8 @@ def dashboard(
     year: str | None = Query(None),
     classification: str | None = Query(None),
     q: str | None = Query(None),
+    sort: str = Query("score"),
+    direction: str = Query("desc"),
     page: int = Query(1, ge=1),
 ) -> Response:
     year_int: int | None = None
@@ -135,6 +137,11 @@ def dashboard(
             year_int = int(year)
         except ValueError:
             year_int = None
+    if sort not in queries.SORT_COLUMNS:
+        sort = "score"
+    direction = direction.lower()
+    if direction not in ("asc", "desc"):
+        direction = "desc"
     window_days = queries.ACTIVITY_WINDOWS.get(window)
     offset = (page - 1) * PAGE_SIZE
     clusters, total = queries.list_clusters(
@@ -143,6 +150,8 @@ def dashboard(
         model_year=year_int,
         classification=classification,
         search=q,
+        sort=sort,
+        direction=direction,
         limit=PAGE_SIZE,
         offset=offset,
     )
@@ -164,9 +173,18 @@ def dashboard(
 
     # Build a query string preserving filters for pagination links.
     from urllib.parse import urlencode
-    base_params = {
+    # Filters only (no sort/direction) — used by sortable column headers so
+    # clicking a header keeps the filter context.
+    filter_params = {
         "window": window, "make": make or "", "year": year_int or "",
         "classification": classification or "", "q": q or "",
+    }
+    filters_qs = urlencode({k: v for k, v in filter_params.items() if v})
+    # Filters + sort/direction — used by pagination links so the page stays sorted.
+    base_params = {
+        **filter_params,
+        "sort": sort if sort != "score" else "",
+        "direction": direction if (sort != "score" or direction != "desc") else "",
     }
     base_qs = urlencode({k: v for k, v in base_params.items() if v})
 
@@ -185,12 +203,16 @@ def dashboard(
             "selected_window": window,
             "selected_make": make,
             "selected_year": year_int,
+            "selected_sort": sort,
+            "selected_direction": direction,
+            "sort_default_dir": queries.SORT_DEFAULT_DIR,
             "selected_classification": classification or "ALL",
             "q": q or "",
             "page": page,
             "last_page": last_page,
             "page_size": PAGE_SIZE,
             "base_qs": base_qs,
+            "filters_qs": filters_qs,
             "last_ingestion": queries.last_ingestion(),
             **_ticker_ctx(),
         },

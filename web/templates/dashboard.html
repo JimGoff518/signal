@@ -5,6 +5,26 @@
   {{ c.make|title }} {{ c.model|title }}
 {%- endmacro %}
 
+{% macro sort_header(label, key, align='left', extra_class='') -%}
+  {% set is_active = (selected_sort == key) %}
+  {% if is_active %}
+    {% set next_dir = 'asc' if selected_direction == 'desc' else 'desc' %}
+  {% else %}
+    {% set next_dir = sort_default_dir.get(key, 'desc') %}
+  {% endif %}
+  {% set href = '/?' ~ (filters_qs ~ '&' if filters_qs else '') ~ 'sort=' ~ key ~ '&direction=' ~ next_dir %}
+  <th class="text-{{ align }} px-4 py-2 font-medium {{ extra_class }}">
+    <a href="{{ href }}" class="inline-flex items-center gap-1 hover:text-zinc-300 transition group {% if is_active %}text-rose-300{% endif %}">
+      <span>{{ label }}</span>
+      {% if is_active %}
+        <span class="text-rose-400 text-[10px]">{% if selected_direction == 'asc' %}▲{% else %}▼{% endif %}</span>
+      {% else %}
+        <span class="text-zinc-700 group-hover:text-zinc-500 text-[10px]">↕</span>
+      {% endif %}
+    </a>
+  </th>
+{%- endmacro %}
+
 {% block content %}
 <!-- Header -->
 <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
@@ -108,15 +128,15 @@
     <table class="w-full text-sm">
       <thead class="text-[11px] text-zinc-500 uppercase tracking-wider bg-zinc-900/40">
         <tr>
-          <th class="text-left px-4 py-2 font-medium">Class</th>
-          <th class="text-left px-4 py-2 font-medium">Vehicle · Component</th>
+          {{ sort_header('Class', 'class', align='left') }}
+          {{ sort_header('Vehicle · Component', 'vehicle', align='left') }}
           <th class="text-left px-4 py-2 font-medium hidden lg:table-cell">12-mo trend</th>
-          <th class="text-right px-4 py-2 font-medium hidden md:table-cell">Last</th>
-          <th class="text-right px-4 py-2 font-medium hidden md:table-cell">Total</th>
-          <th class="text-right px-4 py-2 font-medium hidden lg:table-cell">Inj</th>
-          <th class="text-right px-4 py-2 font-medium hidden lg:table-cell">Dth</th>
-          <th class="text-right px-4 py-2 font-medium hidden lg:table-cell">Δ 30d</th>
-          <th class="text-right px-4 py-2 font-medium w-32 md:w-40">Score</th>
+          {{ sort_header('Last', 'last', align='right', extra_class='hidden md:table-cell') }}
+          {{ sort_header('Total', 'total', align='right', extra_class='hidden md:table-cell') }}
+          {{ sort_header('Inj', 'inj', align='right', extra_class='hidden lg:table-cell') }}
+          {{ sort_header('Dth', 'dth', align='right', extra_class='hidden lg:table-cell') }}
+          {{ sort_header('Δ 30d', 'velocity', align='right', extra_class='hidden lg:table-cell') }}
+          {{ sort_header('Score', 'score', align='right', extra_class='w-32 md:w-40') }}
         </tr>
       </thead>
       <tbody class="divide-y divide-zinc-900">

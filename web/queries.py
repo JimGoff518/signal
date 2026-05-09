@@ -21,6 +21,54 @@ ACTIVITY_WINDOWS: dict[str, int | None] = {
     "Past 30 days": 30,
 }
 
+# Whitelist of dashboard table columns that can be sorted on. Keys are the
+# `?sort=` URL param values; values are the SQL ORDER BY expression. The
+# `vehicle` sort is special-cased in _build_order_by because it spans multiple
+# columns and each needs the same direction applied.
+SORT_COLUMNS: dict[str, str] = {
+    "class": (
+        "CASE c.classification WHEN 'CRITICAL' THEN 0 WHEN 'HOT' THEN 1 "
+        "WHEN 'WATCH' THEN 2 WHEN 'MONITOR' THEN 3 ELSE 4 END"
+    ),
+    "vehicle": "c.make, c.model, c.model_year",
+    "last": "c.last_complaint_date",
+    "total": "c.complaint_count",
+    "inj": "c.injury_count",
+    "dth": "c.death_count",
+    "velocity": "c.velocity_30d",
+    "score": "c.score",
+}
+
+# Default direction for each sort column when first clicked. Strings/dates
+# default to ASC (alphabetical / oldest-first); counts default to DESC.
+SORT_DEFAULT_DIR: dict[str, str] = {
+    "class": "asc",
+    "vehicle": "asc",
+    "last": "desc",
+    "total": "desc",
+    "inj": "desc",
+    "dth": "desc",
+    "velocity": "desc",
+    "score": "desc",
+}
+
+
+def _build_order_by(sort: str, direction: str) -> str:
+    """Resolve a `(sort, direction)` pair to a safe ORDER BY clause.
+
+    Falls back to the default sort if `sort` isn't in the whitelist — that
+    keeps a malformed URL from leaking SQL.
+    """
+    direction = "ASC" if direction.lower() == "asc" else "DESC"
+    nulls = "NULLS FIRST" if direction == "ASC" else "NULLS LAST"
+    if sort == "vehicle":
+        # Apply the same direction to make/model/year for a stable alphabetical sort.
+        return (
+            f"c.make {direction}, c.model {direction}, c.model_year {direction} {nulls}"
+        )
+    expr = SORT_COLUMNS.get(sort, SORT_COLUMNS["score"])
+    return f"{expr} {direction} {nulls}"
+
 
 def list_clusters(
     *,
@@ -29,6 +77,8 @@ def list_clusters(
     model_year: int | None = None,
     classification: str | None = None,
     search: str | None = None,
+    sort: str = "score",
+    direction: str = "desc",
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
@@ -64,6 +114,7 @@ def list_clusters(
         params["q"] = f"%{search.lower()}%"
 
     where_sql = " AND ".join(where)
+    order_by = _build_order_by(sort, direction)
 
     with connection() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) AS n FROM clusters c WHERE {where_sql}", params)
@@ -78,7 +129,7 @@ def list_clusters(
                    c.recall_issued, c.nhtsa_investigation_open
               FROM clusters c
              WHERE {where_sql}
-             ORDER BY c.score DESC, c.complaint_count DESC
+             ORDER BY {order_by}, c.id
              LIMIT %(limit)s OFFSET %(offset)s
             """,
             {**params, "limit": limit, "offset": offset},
