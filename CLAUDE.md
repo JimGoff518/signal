@@ -49,7 +49,7 @@ NHTSA API/flatfiles ──▶ ingestion ──▶ complaints (table)
 
 The pipeline is invoked two ways:
 - **`scripts/historical_import.py`** — one-shot bulk seed from NHTSA flat-file zips (FLAT_CMPL.zip auto-downloads; FLAT_RCL/FLAT_INV optional from repo root). Skip flags: `--skip-complaints`, `--skip-recalls`, `--skip-investigations`. Run once on initial deploy.
-- **`scripts/run_ingestion.py`** — daily delta. Pulls last N days (`NHTSA_LOOKBACK_DAYS`, default 7) per tracked vehicle via the live API, then re-clusters, re-scores, regenerates memos for newly-WATCH+ clusters, and sends alerts. Designed to run on a Railway cron at 02:00 CT (not yet wired up as of this writing).
+- **`scripts/run_ingestion.py`** — incremental delta. Pulls last N days (`NHTSA_LOOKBACK_DAYS`, default 7) per tracked vehicle via the live API, then re-clusters, re-scores, regenerates memos for newly-WATCH+ clusters, and sends alerts. Runs as a Railway cron service named `signal` on schedule `0 7 */3 * *` UTC = 02:00 CT every 3 days (the 7-day lookback gives comfortable overlap so a missed run still backfills cleanly).
 
 **Cluster model.** Every complaint joins **two** clusters: a per-year cluster (`{MAKE}::{MODEL}::{YEAR}::{COMPONENT}`) and a cross-year aggregate (`{MAKE}::{MODEL}::ALL_YEARS::{COMPONENT}`, with `model_year=NULL` and `is_multi_year=TRUE`). The aggregate gets a +10 multi-year bonus when complaints span multiple years. See [src/signalwarn/clustering.py](src/signalwarn/clustering.py).
 
@@ -71,10 +71,11 @@ The pipeline is invoked two ways:
 
 ## Production (Railway)
 
-- Project: `signal`, environment: `production`, web service: `signal-app` at https://signal-mtw.up.railway.app
+- Project: `signal`, environment: `production`. Two services: **`signal-app`** (FastAPI web dashboard at https://signal-mtw.up.railway.app, status "Online") and **`signal`** (cron service running `python scripts/run_ingestion.py` every 3 days at 02:00 CT, status "Ready" between firings). The cron service shares the same repo/Dockerfile as `signal-app` — env vars are configured separately on each.
 - The Postgres DB Railway provisions for the app uses `postgres.railway.internal` for in-cluster traffic. **That hostname does not resolve from a developer laptop** — running scripts that hit prod requires either (a) `railway ssh` into `signal-app` and running there, or (b) using the *public* Postgres URL from the Railway dashboard in your local `.env`. Plain `railway run` injects the internal URL and will time out trying to connect.
-- Multiple Postgres services exist in the project (`Postgres-LPM7`, `Postgres-D5kM`, etc.) — only the one wired to `signal-app`'s `DATABASE_URL` is live. Don't assume from the names; check the linked variable.
-- Deploy: `railway up` from the repo root. The build uses `Dockerfile` (Python 3.12-slim — note: differs from the local 3.14 venv); `.railwayignore` keeps uploads small by excluding `vendor/`, `*.zip`, and `data/raw/`. Healthcheck path is `/healthz`.
+- Multiple Postgres services exist in the project (`Postgres-LPM7`, `Postgres-D5kM`, etc.) — only the one wired to `signal-app`'s `DATABASE_URL` is live. Don't assume from the names; check the linked variable. The cron service must reference the same DB.
+- Deploy: `railway up` from the repo root. The build uses `Dockerfile` (Python 3.12-slim — note: differs from the local 3.14 venv); `.railwayignore` keeps uploads small by excluding `vendor/`, `*.zip`, and `data/raw/`. Healthcheck path is `/healthz` (web service only). A single `railway up` redeploys both services.
+- **Collaborators:** as of 2026-05-09, **Jack Kelley** (GitHub: `JKLaw123`) is a repo collaborator and has dashboard credentials. Some sessions may be working alongside him; don't assume Jim is solo.
 
 ## Operating notes for Claude Code
 
