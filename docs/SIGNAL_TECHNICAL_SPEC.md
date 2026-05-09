@@ -586,7 +586,7 @@ Web-based dashboard. Accessible from any browser. No mobile-specific optimizatio
 ## 10. ALERT SYSTEM
 
 ### 10.1 Email Alerts (MVP — Simple)
-Send to: jim@gofflawpllc.com (hardcoded for MVP)
+Send to: jim@gofflawdfw.com (hardcoded for MVP)
 
 **Daily Digest Email (7:00 AM CT):**
 ```
@@ -637,7 +637,7 @@ Use any transactional email provider (Resend, SendGrid, Postmark — Alex's pref
 ## 12. SECURITY REQUIREMENTS
 
 - Dashboard requires login (simple username/password for MVP — no OAuth needed)
-- Single user account: jim@gofflawpllc.com
+- Single user account: jim@gofflawdfw.com
 - HTTPS required
 - API keys stored as environment variables (never hardcoded)
 - NHTSA data is public — no special handling required

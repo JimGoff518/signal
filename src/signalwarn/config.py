@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     anthropic_model: str = Field("claude-sonnet-4-6")
 
     resend_api_key: str = Field("", description="Resend API key for email alerts")
-    alert_from_email: str = Field("signal@gofflawpllc.com")
-    alert_to_email: str = Field("jim@gofflawpllc.com")
+    alert_from_email: str = Field("signal@gofflawdfw.com")
+    alert_to_email: str = Field("jim@gofflawdfw.com")
 
     nhtsa_lookback_days: int = Field(7, ge=1, le=365)
 
