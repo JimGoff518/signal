@@ -158,10 +158,15 @@
     // ─── DALLAS DOCKET RETRO MODE — Konami easter egg ───
     // Press ↑ ↑ ↓ ↓ ← → ← → B A on any page to activate. Persists across nav.
     // Press again to deactivate.
+    //
+    // Debug from devtools console: window.__signalKonami exposes { idx, seq, on }.
     (function () {
       const SEQ = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown',
                    'ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
-      let buf = [];
+      // Keys we should ignore entirely so they don't break the sequence.
+      const NOISE = new Set(['Shift','Control','Alt','Meta','CapsLock','Tab',
+                             'NumLock','ScrollLock','Escape','Dead']);
+      let idx = 0;
       function flash(msg) {
         let el = document.getElementById('retro-toast');
         if (!el) {
@@ -186,16 +191,33 @@
           document.documentElement.classList.add('retro-mode');
         }
       } catch (e) {}
+      // Expose for console debugging — Jim can run window.__signalKonami in devtools.
+      window.__signalKonami = {
+        get idx() { return idx; },
+        seq: SEQ,
+        get on() { return document.documentElement.classList.contains('retro-mode'); },
+        toggle,
+        reset() { idx = 0; },
+      };
       window.addEventListener('keydown', (e) => {
         // Don't capture keys while typing in inputs.
         const t = e.target;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-        const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-        buf.push(key);
-        if (buf.length > SEQ.length) buf.shift();
-        if (buf.length === SEQ.length && SEQ.every((k, i) => k === buf[i])) {
-          buf = [];
-          toggle();
+        // Drop keyboard auto-repeat — held keys would bury the sequence.
+        if (e.repeat) return;
+        const raw = e.key;
+        // Skip modifier / dead keys so a stray Shift doesn't break the streak.
+        if (NOISE.has(raw)) return;
+        const key = raw.length === 1 ? raw.toLowerCase() : raw;
+        if (key === SEQ[idx]) {
+          idx++;
+          if (idx === SEQ.length) {
+            idx = 0;
+            toggle();
+          }
+        } else {
+          // Mismatch — restart, but if this key matches SEQ[0] start a new attempt.
+          idx = (key === SEQ[0]) ? 1 : 0;
         }
       });
     })();
