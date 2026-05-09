@@ -17,6 +17,7 @@ ACTIVITY_WINDOWS: dict[str, int | None] = {
     "Past year": 365,
     "Past 6 months": 180,
     "Past 90 days": 90,
+    "Past 60 days": 60,
     "Past 30 days": 30,
 }
 
