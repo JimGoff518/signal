@@ -122,17 +122,25 @@ def dashboard(
     user: str = Depends(require_auth),
     window: str = Query("Past 6 months"),
     make: str | None = Query(None),
-    year: int | None = Query(None),
+    # Accept str so the empty-string the filter form submits when "All years"
+    # is selected (year=) parses cleanly. Coerce to int below.
+    year: str | None = Query(None),
     classification: str | None = Query(None),
     q: str | None = Query(None),
     page: int = Query(1, ge=1),
 ) -> Response:
+    year_int: int | None = None
+    if year:
+        try:
+            year_int = int(year)
+        except ValueError:
+            year_int = None
     window_days = queries.ACTIVITY_WINDOWS.get(window)
     offset = (page - 1) * PAGE_SIZE
     clusters, total = queries.list_clusters(
         activity_window_days=window_days,
         make=make,
-        model_year=year,
+        model_year=year_int,
         classification=classification,
         search=q,
         limit=PAGE_SIZE,
@@ -157,7 +165,7 @@ def dashboard(
     # Build a query string preserving filters for pagination links.
     from urllib.parse import urlencode
     base_params = {
-        "window": window, "make": make or "", "year": year or "",
+        "window": window, "make": make or "", "year": year_int or "",
         "classification": classification or "", "q": q or "",
     }
     base_qs = urlencode({k: v for k, v in base_params.items() if v})
@@ -176,7 +184,7 @@ def dashboard(
             "years": queries.all_years(),
             "selected_window": window,
             "selected_make": make,
-            "selected_year": year,
+            "selected_year": year_int,
             "selected_classification": classification or "ALL",
             "q": q or "",
             "page": page,
