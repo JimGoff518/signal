@@ -91,7 +91,11 @@ SIGNAL is predictive. It reads public complaint data early, surfaces emerging de
 
 **Legal data layer (sharpen what we already have):**
 - **TSB cross-referencing** — every TSB zip is already on disk in `data/raw/`. When a manufacturer issues a TSB on a defect but no recall, AND complaints are rising, that's the smoking-gun pattern every mass tort hinges on. Add a `tsb_known` flag to each cluster and a TSB-without-recall scoring escalator.
-- **PACER / CourtListener integration** — pull early-stage federal product-liability filings by manufacturer/component to detect when other firms are starting to nibble (pre-MDL window). Use CourtListener's free RECAP-cached docs first; fall back to PACER for the rest.
+- **PACER / CourtListener integration** *(in progress 2026-05-09)* — pull early-stage federal product-liability filings by manufacturer/component to detect when other firms are starting to nibble (pre-MDL window). Use CourtListener's free RECAP-cached docs first; fall back to PACER for the rest. Specifically:
+  - **Phase 3a — Filing detection** *(building now)*: for every WATCH+ cluster, query CourtListener for matching dockets containing the make/model/component. If a match exists, populate `clusters.class_action_filed = TRUE` and `class_action_url`, which triggers the -30 penalty in scoring. Goal: deduplicate the dashboard so already-lawyered cases drop tier and only virgin territory floats to the top.
+  - **Phase 3b — Active monitoring**: poll CourtListener's RECAP feed daily for new product-liability complaints in target federal districts (E.D. Tex., S.D. Tex., N.D. Cal., D.N.J., E.D. Mo., E.D. Pa., S.D. Fla.). Cross-reference incoming defendant names against tracked manufacturers; auto-flag clusters when a new filing appears.
+  - **Phase 3c — Litigation trends + opinions (Jim's ask 2026-05-09)**: pull recent **class-certification orders** from CourtListener's opinion corpus and run them through Claude to extract: which products/components are being certified, which courts are friendly to plaintiffs, what theories survive *Daubert* and *Comcast*, what damages models are working. Feed this back into the viability memo prompt as live precedent context. Use CourtListener's `/api/rest/v4/search/?type=o` for opinion text.
+  - **Phase 3d — PACER paid fallback** *(later)*: for filings not in RECAP, fetch the docket sheet from PACER (~$0.10/page) only for HOT+ clusters where filing status materially affects strategy. Capped monthly spend.
 - **JPML watchlist** — RSS-poll pending motions to consolidate (Multidistrict Litigation panel). Once a motion is pending, the case is publicly known but most firms aren't watching the JPML docket.
 - **State court docket monitoring** — re:SearchTX for Texas filings (priority — our forum); LexisNexis CourtLink for nationwide coverage.
 - **CAFA notices** — settlements over $5M trigger AG notification; useful as lagging confirmation that a pattern materialized.
@@ -117,6 +121,77 @@ SIGNAL is predictive. It reads public complaint data early, surfaces emerging de
 
 ---
 
+## CALIBRATION — 10-YEAR BACKTEST (added 2026-05-09)
+
+**Premise:** 10 years of NHTSA history is now in the DB. CourtListener integration (Phase 3a) will tag each historical cluster with whether a class action was eventually filed. That gives us a **labeled training set** — every cluster, with both its precursor signals (volume, velocity, multi-year, recall, deaths) AND its eventual outcome (filed / not filed / certified / settled / lost).
+
+**Use that data to answer:**
+- Which signal combinations historically led to **certified** class actions (not just filed)?
+- Which led to **settlements** vs. summary judgment for the defendant?
+- What was the **average lead time** between SIGNAL-detectable signal and first filing? (8 years for GM ignition switch — what's the median across the dataset?)
+- Are there **defects SIGNAL would have flagged** that nobody filed against — because the firms didn't see the pattern, or because the case was actually weak?
+- For the candidates SIGNAL surfaces today, what does the historical base rate of success look like for that signal pattern?
+
+**How:**
+1. After Phase 3a tags historical clusters, build `scripts/backtest_scoring.py` that joins cluster scores against filed/not-filed labels.
+2. Compute precision/recall at each score threshold (e.g., "85% of clusters scoring >70 had a class action filed within 5 years").
+3. Identify weight imbalances — if multi-year is over- or under-weighted relative to historical filing correlation, recalibrate.
+4. Optional v2: train a simple gradient-boosted model on the labeled set as an alternate scoring lens; ensemble or A/B with the rule-based score.
+
+**Why this matters:** the current scoring weights are educated guesses informed by Rule 23 doctrine. Backtesting against actual filings tells us which signals were predictive in practice and which were noise. **This converts SIGNAL from "Jim's intuition encoded as Python" into an empirically calibrated scoring engine** — and gives Jim defensible numbers for any future SaaS pitch ("our scoring achieved 80% precision on a 10-year historical backtest of 17K clusters against 200+ filed class actions").
+
+---
+
+## DEBUG QUEUE — KNOWN ISSUES (added 2026-05-09)
+
+Bugs and rough edges captured during dogfooding. Triage by impact, fix in priority order.
+
+**High impact (block real work):**
+- [ ] **`class_action_filed` flag never populated** — schema column exists and the -30 penalty fires correctly *if set*, but no code populates it. Solved by Phase 3a CourtListener integration (in progress).
+- [ ] **`tsb_known` flag never populated** — TSB zips are on disk in `data/raw/`, `scripts/tsb_smoking_guns.py` exists but has never been run against prod. Once it runs, we still need to wire the flag into the cluster row so scoring can use it.
+- [ ] **Component "OTHER" bucket inflates false positives** — the Kia Sorento "OTHER" cluster surfaced today with score 100. "OTHER" means NHTSA's free-text didn't normalize cleanly, so commonality is weaker than the score implies. Either filter "OTHER" from dashboard surfacing, penalize "OTHER" in scoring, or improve `signalwarn.normalize` to bucket more aggressively.
+
+**Medium impact:**
+- [ ] **Email digest may not have been arriving** — the cron service was running with `gofflawpllc.com` env var values (typo), and Resend's verified-domain status for `gofflawdfw.com` is unknown. Issue #1 (Resend → Gmail SMTP swap, assigned to Jack) should fix this end to end. In the meantime, check the cron service logs for "RESEND_API_KEY not set" or 4xx Resend errors.
+- [ ] **Dashboard "12-mo trend" sparkline can mislead** — sparklines are normalized per-cluster (each cluster's own max), so a cluster with 3 complaints/month looks just as "spiky" as one with 300. Consider a global normalization or a tooltip showing absolute counts.
+- [ ] **`historical_import.py --skip-complaints` (recall + investigation flag application)** — never ran post-bulk-import, so recall_issued / nhtsa_investigation_open are likely incomplete on many clusters. Should be re-run.
+
+**Low impact / polish:**
+- [ ] **Some HOT/CRITICAL clusters from pre-rebalance are now MONITOR** — dashboard's score sort handles this, but the daily-digest email's "newly HOT" detection might fire off-cycle for a few weeks as scores settle.
+- [ ] **Dashboard mobile layout below 1280px** drops the sparkline and Inj/Dth/Δ30d columns — readable but information-dense panels collapse oddly on phones.
+- [ ] **No cluster-level audit log** — when a cluster's score changes (e.g., from a rebalance), we lose the prior value. A `score_history` table would let us show "this cluster jumped from 60 → 95 on 2026-05-09 (rebalance)".
+
+---
+
+## DALLAS DOCKET — INTERFACE FUN ITEMS (added 2026-05-09)
+
+Branding hook: "Dallas Docket — Goff Law's complaint scanner" (the firm's home turf is North Texas; "docket" is the legal-system metaphor). These are *intentional* delight features — tasteful, on-brand, opt-in or hidden by default so client-facing screens stay professional. None of these are required; they're a backlog of fun.
+
+**Stats / status flair:**
+- [ ] **"Stat of the Day"** banner — rotating headline pulled from real data: "1,247 NHTSA complaints filed about your tracked vehicles this week." Updates daily.
+- [ ] **Cluster-of-the-day spotlight card** — randomly highlights one HOT or CRITICAL cluster on dashboard load with a "did you know?" framing. Pulls Jim's attention to clusters he hasn't reviewed.
+- [ ] **"Streak counter"** — tracks how many consecutive days Jim opened the dashboard. Subtle, in the footer. Encourages the Phase 1 milestone of "Jim reviews 3x/week."
+
+**Audio / animation (sparingly, off by default):**
+- [ ] **Critical-alert chime** — a soft, distinctive sound when a new CRITICAL cluster appears in the feed. Off by default; toggleable. Like a Bloomberg terminal but quieter.
+- [ ] **Score-bump animation** — when a cluster's score increases week-over-week, briefly highlight the row with a green pulse. When it drops, a red pulse. Communicates motion at a glance.
+
+**Easter eggs (back-of-the-bus, no client-facing risk):**
+- [ ] **Konami code → "Dallas Docket: Rush Hour" retro mode** — the previously-removed easter egg. If Jim wants it back, the matcher is robust now (per the 2026-05-09 rebuild). 75 lines of CSS/JS, no client-facing risk because it's strictly opt-in via the cheat code. *Note: removed on 2026-05-09 per Jim's call; back in scope as an explicit fun-feature ask.*
+- [ ] **Footer fortune-cookie tort aphorism** — rotating one-liner: "*Res ipsa loquitur* — the thing speaks for itself." or "8 years from signal to recall in the GM ignition switch case. Watch the multi-year aggregates." Visible only on the dashboard footer; ignorable.
+- [ ] **"This day in tort history"** — micro-card showing notable mass-tort milestones (Roundup verdicts, opioid settlements, etc) on the date. Pulled from a static seed list initially; could later integrate with PACER for live milestones.
+
+**Gamification (handle with care — could feel cringe):**
+- [ ] **Achievement badges** — "First signed plaintiff from a SIGNAL cluster," "First $1M settlement traced to a SIGNAL flag," "First Get Goff video derived from a cluster." Internal milestones, not visible to clients.
+- [ ] **"Ad campaign tracker"** — when Jim launches a Texas ad campaign tied to a flagged cluster, that cluster gets a small 📢 icon. Click → see cost-per-lead and signed-retainer count for that cluster. (Requires ad-platform integration; deferred.)
+
+**Pure UI polish that lifts the vibe:**
+- [ ] **Manufacturer logos** in cluster rows — the `car_logos.zip` asset is already on local disk per memory. Drop in, brighten the dashboard significantly.
+- [ ] **Bloomberg-style headline ticker** at the top of the dashboard — the LIVE strip already exists; could be expanded with rotating recent CRITICAL events ("CHEVY EQUINOX ENGINE — 12 NEW COMPLAINTS THIS WEEK").
+- [ ] **Dark / light / "courthouse" theme toggle** — the courthouse theme being a high-contrast print look (white background, navy accents, serif headings) for screenshots Jim wants to send to co-counsel.
+
+**Note:** these are all explicitly Jim-requested. Saved feedback memory `feedback_no_unrequested_features` still applies for *unsolicited* additions — don't ship anything in this section without Jim's explicit go-ahead on that specific item.
+
 ## DATA SOURCES BY PHASE
 
 | Source | Phase | Cost | Data Type |
@@ -130,22 +205,24 @@ SIGNAL is predictive. It reads public complaint data early, surfaces emerging de
 
 ---
 
-## THE ALGORITHM — QUICK REFERENCE
+## THE ALGORITHM — QUICK REFERENCE (rebalanced 2026-05-09 for class-action lens)
 
 Every complaint cluster scores 0–100:
 
 ```
-BASE           +1 per complaint (capped at 30)
-VELOCITY       2x–3x multiplier if complaints doubled/tripled in 30 days
-INJURY         +20 points
-DEATH          +50 points (instant CRITICAL review)
-CRASH          +10 points
-FIRE           +15 points
-MULTI-YEAR     +10 points (systemic defect signal)
-INVESTIGATION  +20 points (NHTSA opened formal probe)
-RECALL ISSUED  +25 points
-ALREADY FILED  -30 points (want to be EARLY)
+NUMEROSITY     +1 per complaint (capped at 50) — Rule 23(a)(1)
+VELOCITY       2x–3x multiplier if 30-day count ≥ 0.5 / 0.66 of total
+COMMONALITY    +20 if multi-year systemic defect — Rule 23(a)(2)
+KNOWLEDGE      +25 if NHTSA investigation open
+               +30 if recall issued
+SEVERITY       +10 if any injury  (mass-tort secondary lens)
+               +20 if any death   (mass-tort secondary lens)
+               +5  if any crash
+               +10 if any fire
+ALREADY FILED  -30 (want to be EARLY)
 ```
+
+Numerosity / commonality / manufacturer-knowledge dominate; severity escalators are kept but reduced because severe individual injury defeats Rule 23 predominance and pushes cases toward mass tort instead of class. See `docs/SIGNAL_TECHNICAL_SPEC.md §7.2` and `tests/test_scoring.py` archetype tests.
 
 **Classifications:**
 - 🔴 90–100: CRITICAL

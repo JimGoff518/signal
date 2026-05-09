@@ -98,4 +98,18 @@ CREATE TABLE IF NOT EXISTS alerts_sent (
   UNIQUE (cluster_id, alert_type)
 );
 
+-- Phase 3a — CourtListener class-action filing detection (added 2026-05-09).
+-- These columns are filled by scripts/check_filings.py querying CourtListener's
+-- search API for each cluster's manufacturer/component, and are also reset by
+-- subsequent re-checks. The class_action_filed boolean above (in the clusters
+-- table) is the score-affecting flag; these columns provide audit trail.
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_url TEXT;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_checked_at TIMESTAMPTZ;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_case_name TEXT;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_court TEXT;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_filed_date DATE;
+
+CREATE INDEX IF NOT EXISTS idx_clusters_class_action_filed
+  ON clusters (class_action_filed) WHERE class_action_filed = TRUE;
+
 COMMIT;

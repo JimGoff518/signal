@@ -29,6 +29,12 @@ class Settings(BaseSettings):
 
     nhtsa_lookback_days: int = Field(7, ge=1, le=365)
 
+    # CourtListener / Free Law Project — Phase 3a class action filing detection.
+    # Token is optional; the public API works unauthenticated but is rate-limited
+    # (~5K req/day). Authenticated users get a much higher ceiling.
+    # Get one free at https://www.courtlistener.com/help/api/rest/#authentication
+    courtlistener_api_token: str = Field("", description="CourtListener API token (optional)")
+
     # Pinecone — Phase 2: semantic similarity across complaint narratives.
     # Phase 1 doesn't read these but they're recognized so .env loads cleanly.
     pinecone_api_key: str = Field("", description="Pinecone API key")
