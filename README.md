@@ -1,8 +1,10 @@
 # SIGNAL
 
-> Mass tort early warning system for Goff Law PLLC.
-> Reads public NHTSA complaint data, clusters defects, scores litigation potential,
-> and surfaces emerging cases years before they become public.
+> Consumer class-action and product-liability early warning system for Goff Law PLLC.
+> Reads public NHTSA complaint data, clusters defects, scores litigation potential
+> against Rule 23 class-certification criteria (numerosity, commonality, manufacturer
+> knowledge, economic harm), and surfaces emerging cases years before they become
+> public. Mass-tort patterns are surfaced as a secondary lens.
 
 **Phase 1 MVP — Confidential. Internal use only.**
 

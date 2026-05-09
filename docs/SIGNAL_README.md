@@ -1,6 +1,6 @@
-# SIGNAL — Mass Tort Early Warning System
+# SIGNAL — Class Action / Product Liability Early Warning System
 ### Goff Law PLLC | Confidential Internal Planning Document
-### Created: March 27, 2026
+### Created: March 27, 2026 | Lens reframed: May 9, 2026
 
 ---
 
@@ -11,6 +11,31 @@
 The core insight: the data to identify the next GM ignition switch, the next Nissan Rogue engine failure, or the next Takata airbag disaster exists in public databases **years before** the first class action is filed. No PI firm has built an automated system to read that data early, target affected consumers with advertising, and sign plaintiffs before national firms even know the case exists.
 
 **SIGNAL** closes that gap.
+
+---
+
+## LITIGATION LENS — UPDATED 2026-05-09
+
+The original framing of this document positioned SIGNAL as a **mass tort early warning system**. After reviewing Goff Law's actual practice mix, the framing is updated:
+
+**Primary lens:** consumer class action + product liability.
+**Secondary lens:** mass tort.
+
+**Why this matters:** Personal-injury cases with severe individual harm (deaths, serious injuries) almost never survive Rule 23(b)(3) class certification — *Amchem* and *Ortiz* killed that path because individualized causation/damages defeat predominance. Those cases proceed as mass torts (MDLs, state coordination), where each plaintiff retains an individual claim. **Class actions thrive on the opposite profile**: widespread *uniform* harm, economic damage, systemic defects across many units/years.
+
+For SIGNAL, this changes which clusters bubble to the top. The original scoring leaned heavily on death and injury escalators (mass-tort signals). The class-action lens prioritizes:
+
+1. **Numerosity** — total complaint volume (Rule 23(a)(1) — class so numerous joinder is impracticable)
+2. **Commonality** — multi-year systemic defects, normalized component clustering (Rule 23(a)(2))
+3. **Manufacturer knowledge** — NHTSA investigations, recalls, TSB patterns (foundation for failure-to-warn theories and *scienter*)
+4. **Economic damage** — narrative keywords like "warranty refused", "buyback", "resale", "dealer denied"
+5. **"Already filed" penalty** — minus 30 because we want to be *early*
+
+Severity (death, injury, crash, fire) remains in scope but at reduced weight — those cases route to the mass-tort lens.
+
+The case studies in this document (GM ignition switch, Nissan Rogue) are still useful illustrations of "early-detectable signal" but they are **mass-tort** archetypes. Equivalent class-action archetypes — defective transmissions, paint peeling, infotainment failures, multi-year warranty denial patterns — should be treated as the primary surface area going forward.
+
+**Reference:** see `civil_litigation_frameworks_reference.md` (shared with Claude on 2026-05-09) for the full doctrinal background on Rule 23, MDL, and product liability theory.
 
 ---
 
@@ -127,32 +152,38 @@ Group complaints by:
    → 47 complaints across NHTSA + Reddit + CarComplaints
 ```
 
-### Step 3 — Scoring (0–100)
+### Step 3 — Scoring (0–100, class-action-lens primary)
 
-**BASE SCORE**
-- +1 point per complaint (volume)
+**BASE SCORE — NUMEROSITY (Rule 23(a)(1))**
+- +1 point per complaint, capped at +50 (was +30 — uplifted to reflect numerosity's primacy)
 
 **VELOCITY BONUS**
-- 2x multiplier if complaints doubled in last 30 days
-- 3x multiplier if complaints tripled in last 30 days
+- 2x multiplier if complaints in last 30 days ≥ 50% of total
+- 3x multiplier if complaints in last 30 days ≥ 66% of total
 
-**SEVERITY ESCALATORS**
-- +20 points if any complaint mentions injury
-- +50 points if any complaint mentions death
-- +10 points if crash = Y on any complaint
-- +10 points if medical attention = Y on any complaint
-- +5 points if police report = Y on any complaint
+**COMMONALITY (Rule 23(a)(2))**
+- +20 points if same defect spans multiple model years (multi-year = systemic = strongest commonality signal; was +10)
 
-**LEGAL VIABILITY SIGNALS**
+**MANUFACTURER KNOWLEDGE (failure-to-warn / *scienter*)**
+- +25 points if NHTSA has opened a formal investigation (was +20)
+- +30 points if a recall has already been issued (was +25)
+- TSB-issued without recall (planned — see Phase 3 in PLAN_AND_GOALS.md)
+
+**ECONOMIC DAMAGE SIGNALS** *(planned — narrative keyword scoring not yet implemented)*
+- +5 points each if complaints mention warranty refusal, value/resale loss, dealer denial
+- These are class-action gold (uniform economic harm = textbook predominance)
+
+**SEVERITY ESCALATORS — secondary (mass-tort lens)**
+- +10 points if any complaint mentions injury (was +20)
+- +20 points if any complaint mentions death (was +50)
+- +5 points if crash = Y on any complaint (was +10)
+- +10 points if fire = Y on any complaint (was +15)
+
+These remain in scope but at reduced weight — severe individual injury pushes a case toward mass-tort classification (MDL), not class certification.
+
+**LEGAL VIABILITY SIGNALS** *(Phase 2 — community corroboration not yet implemented)*
 - +15 points if same issue appears on Reddit
 - +15 points if same issue appears on CarComplaints.com
-- +20 points if NHTSA has opened a formal investigation
-- +25 points if a recall has already been issued
-
-**ECONOMIC DAMAGE SIGNALS (no injury required)**
-- +10 points if complaints mention "value," "resale," "trade-in," "buyback"
-- +10 points if complaints mention "dealer refused," "denied warranty"
-- +10 points if same defect spans multiple model years (systemic = better class cert)
 
 **PENALTY**
 - -30 points if issue is already a filed class action (want to be EARLY)

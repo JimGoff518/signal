@@ -29,14 +29,19 @@ WATCH_THRESHOLD = 50
 
 def _build_prompt(cluster: dict, sample_descriptions: list[str], states: list[str]) -> str:
     samples = "\n\n---\n\n".join(sample_descriptions[:5]) or "(no narratives on file)"
-    return f"""You are a Texas personal injury attorney evaluating a potential
-class action or mass tort case opportunity. Analyze the following complaint
-cluster and provide a brief legal viability assessment.
+    return f"""You are a Texas plaintiff's attorney at Goff Law PLLC evaluating
+a **consumer class action / product liability** opportunity (with mass tort
+as a secondary lens). Personal-injury severity defeats Rule 23 predominance
+under *Amchem*, so prioritize class-certification signals — numerosity,
+commonality, manufacturer knowledge, economic harm — over death/injury counts.
 
 COMPLAINT CLUSTER DATA:
 - Vehicle: {cluster['model_year'] or 'multi-year'} {cluster['make']} {cluster['model']}
 - Component: {cluster['component']}
 - Total Complaints: {cluster['complaint_count']}
+- Multi-year defect: {cluster.get('is_multi_year', False)}
+- NHTSA investigation open: {cluster.get('nhtsa_investigation_open', False)}
+- Recall already issued: {cluster.get('recall_issued', False)}
 - Injuries Reported: {cluster['injury_count']}
 - Deaths Reported: {cluster['death_count']}
 - Crashes Reported: {cluster['crash_count']}
@@ -49,21 +54,23 @@ SAMPLE COMPLAINT DESCRIPTIONS:
 
 Provide a viability assessment in this exact format:
 
-NUMEROSITY: [1-2 sentences — is there a sufficient number of potential plaintiffs?]
+NUMEROSITY (Rule 23(a)(1)): [1-2 sentences — is the class so numerous that joinder is impracticable?]
 
-COMMONALITY: [1-2 sentences — is the defect consistent across complaints?]
+COMMONALITY (Rule 23(a)(2)): [1-2 sentences — is the defect uniform across complaints, including across model years if multi-year? Could one common question generate a common answer?]
 
-ECONOMIC DAMAGE: [1-2 sentences — is there measurable economic loss even without physical injury?]
+PREDOMINANCE (Rule 23(b)(3)): [1-2 sentences — do common questions predominate over individualized issues like causation and damages?]
 
-MANUFACTURER KNOWLEDGE: [1-2 sentences — what does the complaint pattern suggest about when the manufacturer knew?]
+MANUFACTURER KNOWLEDGE: [1-2 sentences — does the pattern (volume, multi-year, TSBs, denied warranties, recalls) suggest the manufacturer knew or should have known? Foundation for failure-to-warn / *scienter*.]
 
-INJURY/DEATH SEVERITY: [1-2 sentences — assessment of physical harm reported]
+ECONOMIC DAMAGE: [1-2 sentences — is there measurable uniform economic loss (warranty denial, diminished value, repair costs, buyback) independent of physical injury? This is class-action gold.]
 
-OVERALL ASSESSMENT: [2-3 sentences — is this worth investigating further? What is the most likely legal theory?]
+INJURY/DEATH SEVERITY (mass-tort secondary lens): [1-2 sentences — if severe individual harm dominates, this likely routes to mass tort / MDL rather than class.]
+
+LEGAL THEORY & VEHICLE: [2-3 sentences — most likely theory (design defect, failure to warn, breach of warranty, consumer fraud) AND most likely vehicle (Rule 23(b)(3) damages class, mass tort/MDL, individual cases). Be specific.]
 
 RECOMMENDED ACTION: [One of: INVESTIGATE NOW / MONITOR CLOSELY / LOW PRIORITY]
 
-Keep the entire response under 400 words. Be direct. Do not use disclaimers.
+Keep the entire response under 500 words. Be direct. Do not use disclaimers.
 Texas law applies."""
 
 

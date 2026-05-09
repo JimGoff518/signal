@@ -14,6 +14,10 @@ SIGNAL is a real-time complaint intelligence platform that:
 3. **Scores** each cluster using a weighted algorithm to identify litigation potential
 4. **Displays** ranked clusters on a web dashboard for attorney review
 
+**Litigation lens (updated 2026-05-09):**
+- **Primary:** consumer class action + product liability — the scoring algorithm prioritizes Rule 23 class-certification signals (numerosity, commonality, manufacturer knowledge, economic harm).
+- **Secondary:** mass tort — severity escalators (death, injury, crash, fire) remain in scope but at reduced weight, since severe individual harm pushes cases away from class certification (per *Amchem*) and into MDL coordination.
+
 The MVP covers Phase 1 only: NHTSA data pipeline + scoring + dashboard.
 Reddit and CarComplaints.com are Phase 2 (not in this spec).
 
@@ -319,55 +323,63 @@ The aggregate cluster receives a bonus in scoring (systemic defect signal).
 ## 7. SCORING ENGINE
 
 ### 7.1 Purpose
-Assign a 0–100 score to each cluster representing litigation potential.
+Assign a 0–100 score to each cluster representing **class-action litigation potential** (primary) with mass-tort severity as secondary signal. Rule 23 prerequisites (numerosity, commonality, manufacturer knowledge) are weighted ahead of injury/death escalators, because severe individual harm defeats class certification under *Amchem* and routes cases to mass-tort instead.
 
-### 7.2 Scoring Formula
+### 7.2 Scoring Formula (rebalanced 2026-05-09)
 
 ```python
 def calculate_score(cluster):
     score = 0
 
-    # BASE SCORE — Volume
-    score += cluster.complaint_count  # 1 point per complaint
-    score = min(score, 30)  # Cap base score at 30
+    # ── NUMEROSITY — Rule 23(a)(1) ──────────────────────────────
+    # Volume is THE class-action signal. Cap raised from 30 → 50.
+    score += min(cluster.complaint_count, 50)
 
-    # VELOCITY BONUS
-    if cluster.velocity_30d > 0 and cluster.velocity_30d >= cluster.complaint_count * 0.5:
-        score *= 2  # Doubled in last 30 days
-    elif cluster.velocity_30d > 0 and cluster.velocity_30d >= cluster.complaint_count * 0.66:
-        score *= 3  # Tripled in last 30 days
+    # ── VELOCITY BONUS ──────────────────────────────────────────
+    # Check tripled (0.66) FIRST so the larger multiplier wins
+    # when both branches apply. (Spec v1.0 had these reversed.)
+    if cluster.velocity_30d > 0:
+        if cluster.velocity_30d >= cluster.complaint_count * 0.66:
+            score *= 3
+        elif cluster.velocity_30d >= cluster.complaint_count * 0.5:
+            score *= 2
 
-    # SEVERITY ESCALATORS
-    if cluster.injury_count > 0:
-        score += 20
-    if cluster.death_count > 0:
-        score += 50
-    if cluster.crash_count > 0:
-        score += 10
-    if cluster.fire_count > 0:
-        score += 15
-
-    # CROSS-YEAR SIGNAL
+    # ── COMMONALITY — Rule 23(a)(2) ─────────────────────────────
+    # Multi-year systemic defect = strongest commonality signal.
     if cluster.is_multi_year:
-        score += 10
+        score += 20  # was +10
 
-    # NHTSA INVESTIGATION OPEN (see Section 7.3)
+    # ── MANUFACTURER KNOWLEDGE ──────────────────────────────────
+    # Foundation for failure-to-warn theories and *scienter*.
     if cluster.nhtsa_investigation_open:
-        score += 20
-
-    # RECALL ISSUED
+        score += 25  # was +20
     if cluster.recall_issued:
-        score += 25
+        score += 30  # was +25
 
-    # EXISTING CLASS ACTION PENALTY
+    # ── SEVERITY ESCALATORS — secondary (mass-tort lens) ────────
+    # Reduced from v1.0 to de-emphasize mass-tort routing. These
+    # cases stay in scope but don't crowd out class-action signals.
+    if cluster.injury_count > 0:
+        score += 10  # was +20
+    if cluster.death_count > 0:
+        score += 20  # was +50
+    if cluster.crash_count > 0:
+        score += 5   # was +10
+    if cluster.fire_count > 0:
+        score += 10  # was +15
+
+    # ── EXISTING CLASS ACTION PENALTY ───────────────────────────
+    # Already filed = we're late. Penalty preserves the early-mover edge.
     if cluster.class_action_filed:
         score -= 30
 
-    # Cap at 100
-    score = min(score, 100)
-    score = max(score, 0)
+    # ── PLANNED (not yet implemented) ───────────────────────────
+    # Economic-damage narrative keyword scoring (warranty refused,
+    # buyback, resale loss, dealer denial) — class-action gold.
+    # Each category → +5 points. See Phase 2 / Phase 3 in
+    # SIGNAL_PLAN_AND_GOALS.md.
 
-    return score
+    return max(0, min(100, score))
 ```
 
 ### 7.3 Classification Thresholds
@@ -427,9 +439,11 @@ const response = await fetch("https://api.anthropic.com/v1/messages", {
 ### 8.4 Prompt Template
 ```javascript
 function buildViabilityPrompt(cluster) {
-  return `You are a Texas personal injury attorney evaluating a potential
-class action or mass tort case opportunity. Analyze the following complaint
-cluster and provide a brief legal viability assessment.
+  return `You are a Texas plaintiff's attorney at Goff Law PLLC evaluating
+a potential **consumer class action / product liability** case (with mass
+tort as a secondary lens). Analyze the following complaint cluster and
+provide a brief legal viability assessment focused on Rule 23
+class-certification criteria first, mass-tort indicators second.
 
 COMPLAINT CLUSTER DATA:
 - Vehicle: ${cluster.model_year} ${cluster.make} ${cluster.model}
@@ -491,7 +505,7 @@ Web-based dashboard. Accessible from any browser. No mobile-specific optimizatio
 **Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  🔴 SIGNAL — Mass Tort Early Warning System    [Goff Law]   │
+│  🔴 SIGNAL — Class Action / Product Liability  [Goff Law]   │
 ├─────────────────────────────────────────────────────────────┤
 │  Filters: [Make ▼] [Model Year ▼] [Classification ▼] [Search]│
 ├─────────────────────────────────────────────────────────────┤

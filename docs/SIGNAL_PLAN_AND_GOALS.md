@@ -8,7 +8,9 @@
 
 A real-time complaint intelligence dashboard that monitors public government databases and online communities to identify emerging vehicle defect patterns — before they become known litigation — so Goff Law can advertise to affected consumers and sign plaintiffs before any competing firm knows the case exists.
 
-**One sentence:** SIGNAL finds the next GM ignition switch in 2006, not 2014.
+**Primary legal lens:** consumer class action + product liability (with mass tort as a secondary lens). The scoring algorithm reflects this — numerosity, commonality, manufacturer knowledge, and economic-harm signals are weighted ahead of mass-tort severity escalators (death/injury), because severe individual injury defeats Rule 23 predominance and pushes cases away from class treatment.
+
+**One sentence:** SIGNAL finds the next GM ignition switch in 2006, not 2014 — *and* the next quietly-spreading transmission-shudder defect three years before any class action is filed.
 
 ---
 

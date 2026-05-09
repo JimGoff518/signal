@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-SIGNAL is a mass tort early warning system for Goff Law PLLC. It pulls NHTSA vehicle complaint data, clusters defects by make/model/year/component, scores each cluster 0-100, generates Anthropic-powered viability memos for high-scoring clusters, and emails daily digests + instant death alerts. Phase 1 MVP, currently in production. The full business + algorithmic context lives in [docs/SIGNAL_README.md](docs/SIGNAL_README.md), [docs/SIGNAL_TECHNICAL_SPEC.md](docs/SIGNAL_TECHNICAL_SPEC.md), and [docs/SIGNAL_PLAN_AND_GOALS.md](docs/SIGNAL_PLAN_AND_GOALS.md) — read those if anything in code feels arbitrary; the *why* lives there.
+SIGNAL is a **consumer class-action + product-liability** early warning system for Goff Law PLLC, with mass-tort patterns surfaced as a secondary lens. It pulls NHTSA vehicle complaint data, clusters defects by make/model/year/component, scores each cluster 0-100 against Rule 23 class-certification criteria (numerosity, commonality, manufacturer knowledge, economic harm) plus mass-tort severity signals, generates Anthropic-powered viability memos for high-scoring clusters, and emails periodic digests + death alerts. Phase 1 MVP, currently in production. The full business + algorithmic context lives in [docs/SIGNAL_README.md](docs/SIGNAL_README.md), [docs/SIGNAL_TECHNICAL_SPEC.md](docs/SIGNAL_TECHNICAL_SPEC.md), and [docs/SIGNAL_PLAN_AND_GOALS.md](docs/SIGNAL_PLAN_AND_GOALS.md) — read those if anything in code feels arbitrary; the *why* lives there.
+
+**Why class-action-first matters:** Personal-injury cases with severe individual harm rarely survive Rule 23 certification (predominance defeats class treatment per *Amchem*) — they go mass-tort instead. Consumer class actions and product liability thrive on widespread *uniform* harm: economic damage, warranty failures, systemic design defects across many units/years. The scoring algorithm reflects this: numerosity and commonality outweigh injury severity. See [docs/SIGNAL_TECHNICAL_SPEC.md §7](docs/SIGNAL_TECHNICAL_SPEC.md) for the formula.
 
 ## Common commands
 
