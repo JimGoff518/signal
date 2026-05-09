@@ -50,8 +50,13 @@ from signalwarn.db import connection  # noqa: E402
     default="signal",
     help="Ranking strategy.",
 )
-def main(limit: int, min_complaints: int, classification: str, by: str) -> None:
-    rows = _fetch_rows(min_complaints, classification)
+@click.option(
+    "--unaddressed",
+    is_flag=True,
+    help="Filter to clusters with NO recall and NO open NHTSA investigation — i.e. opportunities not yet on anyone else's radar.",
+)
+def main(limit: int, min_complaints: int, classification: str, by: str, unaddressed: bool) -> None:
+    rows = _fetch_rows(min_complaints, classification, unaddressed)
     if not rows:
         click.echo("No clusters match the filters.")
         return
@@ -71,7 +76,7 @@ def main(limit: int, min_complaints: int, classification: str, by: str) -> None:
     _print_table(rows, by)
 
 
-def _fetch_rows(min_complaints: int, classification: str) -> list[dict]:
+def _fetch_rows(min_complaints: int, classification: str, unaddressed: bool = False) -> list[dict]:
     where = ["complaint_count >= %s"]
     params: list = [min_complaints]
     if classification == "ALL":
@@ -80,6 +85,9 @@ def _fetch_rows(min_complaints: int, classification: str) -> list[dict]:
     else:
         where.append("classification = %s")
         params.append(classification)
+    if unaddressed:
+        where.append("recall_issued = FALSE")
+        where.append("nhtsa_investigation_open = FALSE")
 
     sql = f"""
         SELECT id, classification, score, complaint_count, injury_count, death_count,
