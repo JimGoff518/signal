@@ -9,15 +9,20 @@ Run locally:
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
+import threading
+from datetime import datetime, timezone
+
+from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from signalwarn.config import settings
+from signalwarn.migrations import apply_pending
 from signalwarn.viability import regenerate_memo_if_needed
 from web import queries
 
@@ -26,7 +31,22 @@ log = logging.getLogger(__name__)
 WEB_ROOT = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(WEB_ROOT / "templates"))
 
-app = FastAPI(title="SIGNAL", docs_url=None, redoc_url=None)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Apply pending DDL on every boot so deploys auto-migrate.
+
+    Every statement in `signalwarn.migrations.PENDING` is idempotent
+    (`IF NOT EXISTS`), so calling this on every container start is safe
+    and a no-op once the schema is up to date. Failures are logged but
+    don't crash the app — a transient DB blip at boot shouldn't take
+    the web service down.
+    """
+    apply_pending()
+    yield
+
+
+app = FastAPI(title="SIGNAL", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.signal_password + "::" + settings.signal_username,
@@ -290,6 +310,125 @@ def cluster_panel(
             "total_complaints": queries.count_complaints(cluster_id),
         },
     )
+
+
+# ─── Admin operations ───────────────────────────────────────────────────
+#
+# Admin tasks (re-checking filings, rescoring all clusters, manually applying
+# migrations) used to require `railway ssh` + manually running scripts. That
+# was painful and brittle (PowerShell-on-Windows + remote SSH = bad). The
+# admin page below exposes one-click triggers for each operation, runs them
+# as background threads, and shows the latest status in-page. No SSH needed.
+#
+# Tasks run in daemon threads so they survive uvicorn worker recycling
+# gracefully and write logs to stdout (visible in Railway Logs tab).
+
+_admin_status: dict[str, dict] = {
+    "check_filings": {"state": "idle", "started_at": None, "finished_at": None,
+                      "summary": None, "args": None, "error": None},
+    "rescore_all":   {"state": "idle", "started_at": None, "finished_at": None,
+                      "summary": None, "args": None, "error": None},
+}
+_admin_lock = threading.Lock()
+
+
+def _admin_run(task_key: str, args: dict, fn, *fn_args, **fn_kwargs) -> None:
+    """Background-thread wrapper that updates _admin_status as the task progresses."""
+    with _admin_lock:
+        _admin_status[task_key].update(
+            state="running",
+            started_at=datetime.now(timezone.utc),
+            finished_at=None,
+            summary=None,
+            args=args,
+            error=None,
+        )
+    try:
+        result = fn(*fn_args, **fn_kwargs)
+        with _admin_lock:
+            _admin_status[task_key].update(
+                state="done",
+                finished_at=datetime.now(timezone.utc),
+                summary=result,
+            )
+    except Exception as e:  # noqa: BLE001
+        log.exception("admin task %s failed", task_key)
+        with _admin_lock:
+            _admin_status[task_key].update(
+                state="error",
+                finished_at=datetime.now(timezone.utc),
+                error=str(e),
+            )
+
+
+def _admin_busy(task_key: str) -> bool:
+    with _admin_lock:
+        return _admin_status[task_key]["state"] == "running"
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request, user: str = Depends(require_auth)) -> Response:
+    """Operations dashboard. Shows current task status + buttons to trigger work."""
+    with _admin_lock:
+        status_snapshot = {k: dict(v) for k, v in _admin_status.items()}
+    return templates.TemplateResponse(
+        request,
+        "admin.html",
+        {
+            "title": "SIGNAL — Admin",
+            "user": user,
+            "status": status_snapshot,
+            **_ticker_ctx(),
+        },
+    )
+
+
+@app.post("/admin/check-filings")
+def admin_check_filings(
+    request: Request,
+    user: str = Depends(require_auth),
+    min_score: int = Form(70),
+    matched_only: bool = Form(False),
+) -> Response:
+    """Kick off a CourtListener filings check as a background thread."""
+    if _admin_busy("check_filings"):
+        return RedirectResponse("/admin?msg=already-running", status_code=303)
+
+    from signalwarn.filings_check import run_check_filings
+
+    args = {"min_score": min_score, "matched_only": matched_only}
+    threading.Thread(
+        target=_admin_run,
+        args=("check_filings", args, run_check_filings),
+        kwargs={"min_score": min_score, "matched_only": matched_only},
+        daemon=True,
+        name="check_filings",
+    ).start()
+    return RedirectResponse("/admin?msg=started", status_code=303)
+
+
+@app.post("/admin/rescore-all")
+def admin_rescore_all(request: Request, user: str = Depends(require_auth)) -> Response:
+    """Kick off a full rescore as a background thread."""
+    if _admin_busy("rescore_all"):
+        return RedirectResponse("/admin?msg=already-running", status_code=303)
+
+    from signalwarn.historical import rescore_all_clusters
+
+    def _run() -> dict:
+        n = rescore_all_clusters()
+        return {"clusters_rescored": n}
+
+    threading.Thread(
+        target=_admin_run,
+        args=("rescore_all", {}, _run),
+        daemon=True,
+        name="rescore_all",
+    ).start()
+    return RedirectResponse("/admin?msg=started", status_code=303)
+
+
+# ─── Cluster operations (existing) ──────────────────────────────────────
 
 
 @app.post("/cluster/{cluster_id}/regenerate-memo", response_class=HTMLResponse)
