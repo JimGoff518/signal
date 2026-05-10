@@ -28,4 +28,11 @@ RUN pip install -e .
 EXPOSE 8080
 
 # FastAPI via uvicorn. Railway routes traffic to this port.
-CMD uvicorn web.app:app --host 0.0.0.0 --port 8080 --workers 2 --proxy-headers --forwarded-allow-ips="*"
+#
+# --workers 1: the /admin background-task pattern uses a module-level dict
+# for status (web/app.py::_admin_status). Multiple workers don't share that
+# memory, so the polling user could land on a worker that doesn't know about
+# the running job → ghost-job UI bugs. SIGNAL is a single-user internal tool;
+# we don't need horizontal scaling. Move state to Postgres if/when this needs
+# to scale past one worker.
+CMD uvicorn web.app:app --host 0.0.0.0 --port 8080 --workers 1 --proxy-headers --forwarded-allow-ips="*"
