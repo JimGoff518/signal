@@ -67,6 +67,7 @@ class Filing:
     docket_number: str
     absolute_url: str  # path on courtlistener.com — prepend the host
     suit_nature: str = ""  # e.g. "Personal Injury - Product Liability"
+    date_terminated: date | None = None  # NULL if still pending
 
     @property
     def url(self) -> str:
@@ -75,6 +76,19 @@ class Filing:
         if self.absolute_url.startswith("http"):
             return self.absolute_url
         return f"https://www.courtlistener.com{self.absolute_url}"
+
+    @property
+    def status(self) -> str:
+        """'terminated' if dateTerminated is set, else 'pending'.
+
+        Per Jim's call (2026-05-09): once a case is terminated — whether by
+        settlement, dismissal, summary judgment for defendant, certification
+        of a different class counsel, or any other resolution — the cluster
+        should be hidden from the dashboard rather than shown with a -30
+        penalty. Class counsel has been chosen / case is closed = no money
+        for a new firm.
+        """
+        return "terminated" if self.date_terminated is not None else "pending"
 
 
 class CourtListenerClient:
@@ -139,6 +153,16 @@ class CourtListenerClient:
         return [_parse_result(r) for r in results[:limit]]
 
 
+def _parse_iso_date(raw: object) -> date | None:
+    """Best-effort ISO-date parse; returns None on bad input."""
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(str(raw)[:10])
+    except (ValueError, TypeError):
+        return None
+
+
 def _parse_result(r: dict) -> Filing:
     """Pull the fields we care about out of a search result.
 
@@ -146,22 +170,16 @@ def _parse_result(r: dict) -> Filing:
     endpoints used `absolute_url`. Try both so the parser keeps working if
     the field name shifts again.
     """
-    raw = r.get("dateFiled")
-    parsed_date: date | None = None
-    if raw:
-        try:
-            parsed_date = date.fromisoformat(raw[:10])
-        except (ValueError, TypeError):
-            parsed_date = None
     return Filing(
         case_name=str(r.get("caseName") or r.get("caseNameShort") or "(unknown)").strip(),
         court=str(r.get("court") or r.get("court_id") or "").strip(),
-        date_filed=parsed_date,
+        date_filed=_parse_iso_date(r.get("dateFiled")),
         docket_number=str(r.get("docketNumber") or "").strip(),
         absolute_url=str(
             r.get("docket_absolute_url") or r.get("absolute_url") or ""
         ).strip(),
         suit_nature=str(r.get("suitNature") or "").strip(),
+        date_terminated=_parse_iso_date(r.get("dateTerminated")),
     )
 
 

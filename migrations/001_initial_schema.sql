@@ -108,8 +108,15 @@ ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_checked_at TIMESTAMPT
 ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_case_name TEXT;
 ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_court TEXT;
 ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_filed_date DATE;
+-- 'pending' (still in court → -30 penalty) or 'terminated' (settled / dismissed
+-- / SJ for defendant → hide entirely; class counsel chosen or case closed
+-- means no opportunity for a new firm).
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_status TEXT;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_terminated_date DATE;
 
 CREATE INDEX IF NOT EXISTS idx_clusters_class_action_filed
   ON clusters (class_action_filed) WHERE class_action_filed = TRUE;
+CREATE INDEX IF NOT EXISTS idx_clusters_class_action_status
+  ON clusters (class_action_status) WHERE class_action_status IS NOT NULL;
 
 COMMIT;

@@ -124,9 +124,12 @@ def main() -> int:
                 continue
             if filing:
                 found += 1
+                tag = filing.status.upper()
+                if filing.status == "terminated":
+                    tag += f" {filing.date_terminated}"
                 log.info(
-                    "  match: %s %s %s [%s] → %s (%s, filed %s)",
-                    c["make"], c["model"], c["component"], c["classification"],
+                    "  match [%s]: %s %s %s [%s] → %s (%s, filed %s)",
+                    tag, c["make"], c["model"], c["component"], c["classification"],
                     filing.case_name, filing.court, filing.date_filed,
                 )
             _mark_checked(c["id"], filing=filing, dry_run=args.dry_run)
@@ -158,7 +161,10 @@ def main() -> int:
 
 
 def _mark_checked(cluster_id: int, *, filing, dry_run: bool) -> None:
-    """Record the check in the DB. Sets class_action_filed if a match was found."""
+    """Record the check in the DB. Sets class_action_filed if a match was found,
+    plus class_action_status ('pending' or 'terminated') and termination date.
+    Terminated cases are filtered out of the dashboard by the read query —
+    see web/queries.py::list_clusters."""
     if dry_run:
         return
     now = datetime.now(timezone.utc)
@@ -172,6 +178,8 @@ def _mark_checked(cluster_id: int, *, filing, dry_run: bool) -> None:
                        class_action_case_name = NULL,
                        class_action_court = NULL,
                        class_action_filed_date = NULL,
+                       class_action_status = NULL,
+                       class_action_terminated_date = NULL,
                        class_action_checked_at = %s
                  WHERE id = %s
                 """,
@@ -186,11 +194,14 @@ def _mark_checked(cluster_id: int, *, filing, dry_run: bool) -> None:
                        class_action_case_name = %s,
                        class_action_court = %s,
                        class_action_filed_date = %s,
+                       class_action_status = %s,
+                       class_action_terminated_date = %s,
                        class_action_checked_at = %s
                  WHERE id = %s
                 """,
                 (filing.url, filing.case_name, filing.court,
-                 filing.date_filed, now, cluster_id),
+                 filing.date_filed, filing.status, filing.date_terminated,
+                 now, cluster_id),
             )
 
 

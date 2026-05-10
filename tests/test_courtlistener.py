@@ -115,3 +115,50 @@ def test_filing_url_property():
     f = Filing(case_name="X", court="Y", date_filed=None, docket_number="Z",
                absolute_url="/foo")
     assert f.url == "https://www.courtlistener.com/foo"
+
+
+# ─── Case status (pending vs terminated) ────────────────────────────────
+
+def test_filing_status_pending_when_not_terminated():
+    f = Filing(case_name="X", court="Y", date_filed=date(2024, 1, 1),
+               docket_number="Z", absolute_url="/foo", date_terminated=None)
+    assert f.status == "pending"
+
+
+def test_filing_status_terminated_when_termination_date_set():
+    f = Filing(case_name="X", court="Y", date_filed=date(2020, 1, 1),
+               docket_number="Z", absolute_url="/foo",
+               date_terminated=date(2024, 6, 1))
+    assert f.status == "terminated"
+
+
+def test_parse_result_captures_termination_date():
+    f = _parse_result({
+        "caseName": "Old v. Acme",
+        "dateFiled": "2018-01-01",
+        "dateTerminated": "2022-06-15",
+        "docket_absolute_url": "/x",
+    })
+    assert f.date_terminated == date(2022, 6, 15)
+    assert f.status == "terminated"
+
+
+def test_parse_result_pending_when_no_termination_date():
+    f = _parse_result({
+        "caseName": "New v. Acme",
+        "dateFiled": "2025-01-01",
+        "docket_absolute_url": "/x",
+        # no dateTerminated key
+    })
+    assert f.date_terminated is None
+    assert f.status == "pending"
+
+
+def test_parse_result_handles_malformed_termination_date():
+    f = _parse_result({
+        "caseName": "X",
+        "dateTerminated": "garbage",
+        "docket_absolute_url": "/x",
+    })
+    assert f.date_terminated is None
+    assert f.status == "pending"

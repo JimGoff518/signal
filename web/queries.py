@@ -86,7 +86,16 @@ def list_clusters(
 
     Always paginated — rendering thousands of HTML rows freezes the browser.
     """
-    where = ["c.classification != 'NOISE'"]
+    # Hide clusters whose class action was terminated (settled, dismissed, SJ
+    # for defendant, or otherwise resolved). Class counsel has already been
+    # chosen / case is closed → no opportunity for a new firm to make money,
+    # so these are pure noise on the dashboard. Pending class actions stay
+    # visible (with the -30 score penalty) so Jim can see what's been filed
+    # but isn't yet resolved.
+    where = [
+        "c.classification != 'NOISE'",
+        "(c.class_action_status IS NULL OR c.class_action_status = 'pending')",
+    ]
     params: dict[str, Any] = {}
 
     if activity_window_days is not None:
@@ -138,8 +147,12 @@ def list_clusters(
 
 
 def classification_counts(activity_window_days: int | None = 180) -> dict[str, int]:
-    """Counts per classification for the stats strip."""
-    where = ["classification != 'NOISE'"]
+    """Counts per classification for the stats strip. Excludes clusters whose
+    class action has been terminated, mirroring the dashboard filter."""
+    where = [
+        "classification != 'NOISE'",
+        "(class_action_status IS NULL OR class_action_status = 'pending')",
+    ]
     params: dict[str, Any] = {}
     if activity_window_days is not None:
         where.append("last_complaint_date >= %(floor)s")

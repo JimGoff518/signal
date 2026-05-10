@@ -44,6 +44,16 @@ PENDING: list[tuple[str, str]] = [
           ON clusters (class_action_filed) WHERE class_action_filed = TRUE;
         """,
     ),
+    (
+        "2026-05-09 — CourtListener case status (pending vs terminated)",
+        """
+        ALTER TABLE clusters
+          ADD COLUMN IF NOT EXISTS class_action_status TEXT,
+          ADD COLUMN IF NOT EXISTS class_action_terminated_date DATE;
+        CREATE INDEX IF NOT EXISTS idx_clusters_class_action_status
+          ON clusters (class_action_status) WHERE class_action_status IS NOT NULL;
+        """,
+    ),
 ]
 
 
