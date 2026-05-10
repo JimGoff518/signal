@@ -52,6 +52,11 @@ def main() -> int:
                         help="Log matches but don't write to the DB.")
     parser.add_argument("--limit", type=int, default=None,
                         help="Cap on number of clusters to check (testing).")
+    parser.add_argument("--matched-only", action="store_true",
+                        help="Only re-check clusters that already have "
+                             "class_action_filed=TRUE. Useful for backfilling "
+                             "newly-added columns (e.g. status) without burning "
+                             "API quota on the full HOT+ band.")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -64,7 +69,11 @@ def main() -> int:
     # Build the WHERE clause for which clusters to check.
     where_clauses = ["score >= %(min_score)s", "classification != 'NOISE'"]
     params: dict = {"min_score": args.min_score}
-    if args.recheck_days is None:
+    if args.matched_only:
+        # Re-check existing matches only — a cheap way to backfill new
+        # columns onto rows that already have class_action_filed=TRUE.
+        where_clauses.append("class_action_filed = TRUE")
+    elif args.recheck_days is None:
         where_clauses.append("class_action_checked_at IS NULL")
     else:
         cutoff = datetime.now(timezone.utc) - timedelta(days=args.recheck_days)
