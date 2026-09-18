@@ -1,27 +1,36 @@
 {% extends "base.html" %}
 
-{% set badge = CLASSIFICATION_BADGE.get(cluster.classification) %}
-{% set vehicle = (cluster.model_year ~ ' ' if cluster.model_year else 'multi-year ') ~ cluster.make|title ~ ' ' ~ cluster.model|title %}
+{% set p = PALETTE.get(cluster.classification, PALETTE['NOISE']) %}
+{% set vehicle = (cluster.model_year ~ ' ' if cluster.model_year else 'All years · ') ~ cluster.make|title ~ ' ' ~ cluster.model|title %}
+{% set lit = ((cluster.score / 10) | round | int) %}
 
 {% block content %}
-<a href="javascript:history.back()" class="text-sm text-zinc-400 hover:text-zinc-100 inline-flex items-center gap-1.5 mb-4 transition">
-  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m0 0l7 7m-7-7l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  Back
+<a href="/" class="text-sm text-zinc-400 hover:text-zinc-100 inline-flex items-center gap-1.5 mb-4 transition-colors duration-150 rounded">
+  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5m0 0l7 7m-7-7l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  Back to clusters
 </a>
 
 <!-- Header -->
 <div class="mb-8">
-  <div class="flex items-center gap-3 mb-2">
-    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium tracking-wide uppercase ring-1 ring-inset {{ badge[1] if badge else '' }}">
-      <span class="w-1.5 h-1.5 rounded-full mr-1.5 {% if cluster.classification=='CRITICAL' %}bg-rose-400{% elif cluster.classification=='HOT' %}bg-orange-400{% elif cluster.classification=='WATCH' %}bg-amber-400{% elif cluster.classification=='MONITOR' %}bg-emerald-400{% else %}bg-zinc-400{% endif %}"></span>
+  <div class="flex items-center gap-3 mb-2 flex-wrap">
+    <span class="inline-flex items-center px-2 py-0.5 rounded-md font-display text-[11px] font-semibold tracking-wide uppercase ring-1 ring-inset {{ p.badge }}">
+      <span class="w-1.5 h-1.5 rounded-full mr-1.5 {{ p.dot }}" aria-hidden="true"></span>
       {{ cluster.classification }}
     </span>
-    <span class="text-sm text-zinc-500 num">Score {{ cluster.score }}/100</span>
-    {% if cluster.recall_issued %}<span class="text-xs text-amber-400 ring-1 ring-amber-500/30 px-1.5 py-0.5 rounded">RECALL ISSUED</span>{% endif %}
-    {% if cluster.nhtsa_investigation_open %}<span class="text-xs text-orange-400 ring-1 ring-orange-500/30 px-1.5 py-0.5 rounded">NHTSA PROBE OPEN</span>{% endif %}
+    <span class="meter {{ p.text }}" aria-hidden="true">{% for i in range(10) %}<i class="{% if i < lit %}on{% endif %}"></i>{% endfor %}</span>
+    <span class="text-sm text-zinc-400 num font-mono">Score {{ cluster.score }}/100</span>
+    {% if cluster.recall_issued %}<span class="pill text-amber-300 ring-amber-500/30">Recall issued</span>{% endif %}
+    {% if cluster.nhtsa_investigation_open %}<span class="pill text-orange-300 ring-orange-500/30">NHTSA probe open</span>{% endif %}
+    {% if cluster.class_action_filed %}<span class="pill text-rose-300 ring-rose-500/30">Class action pending</span>{% endif %}
   </div>
-  <h1 class="text-3xl font-semibold tracking-tight">{{ vehicle }}</h1>
+  <h1 class="font-display text-3xl font-semibold tracking-tight">{{ vehicle }}</h1>
   <p class="text-zinc-400 mt-1">{{ cluster.component }}</p>
+  {% if cluster.class_action_filed and cluster.class_action_case_name %}
+  <p class="text-sm text-zinc-400 mt-2">
+    <span class="text-rose-300">{{ cluster.class_action_case_name }}</span>{% if cluster.class_action_court %} · {{ cluster.class_action_court }}{% endif %}{% if cluster.class_action_filed_date %} · filed {{ cluster.class_action_filed_date }}{% endif %}
+    {% if cluster.class_action_url %} · <a href="{{ cluster.class_action_url }}" target="_blank" rel="noopener" class="text-zinc-300 hover:text-zinc-100 underline underline-offset-2 rounded">CourtListener ↗</a>{% endif %}
+  </p>
+  {% endif %}
 </div>
 
 <!-- Stats grid -->
@@ -32,91 +41,93 @@
     ('Deaths', cluster.death_count, 'text-rose-400' if cluster.death_count else 'text-zinc-500'),
     ('Crashes', cluster.crash_count, 'text-zinc-300'),
     ('Fires', cluster.fire_count, 'text-zinc-300'),
-    ('Δ 30 days', cluster.velocity_30d, 'text-zinc-300'),
+    ('New · 30 days', cluster.velocity_30d, 'text-zinc-300'),
   ] %}
   {% for label, val, color in stats %}
-  <div class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-3">
-    <div class="text-xs uppercase tracking-wide text-zinc-500">{{ label }}</div>
-    <div class="text-2xl font-semibold mt-1 num {{ color }}">{{ "{:,}".format(val) if val is number else val }}</div>
+  <div class="card p-3 md:p-4">
+    <div class="eyebrow">{{ label }}</div>
+    <div class="text-2xl font-semibold mt-1 {{ color }}">{{ "{:,}".format(val) if val is number else val }}</div>
   </div>
   {% endfor %}
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-  <!-- States + dates side panel -->
-  <div class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
-    <div class="text-xs uppercase tracking-wide text-zinc-500 mb-2">Span</div>
-    <div class="text-sm text-zinc-300">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+  <!-- Span + states -->
+  <div class="card p-4">
+    <div class="eyebrow mb-2">Span</div>
+    <div class="text-sm text-zinc-300 num">
       First: <span class="text-zinc-100">{{ cluster.first_complaint_date or "—" }}</span><br/>
       Last: <span class="text-zinc-100">{{ cluster.last_complaint_date or "—" }}</span>
     </div>
-    <div class="text-xs uppercase tracking-wide text-zinc-500 mt-4 mb-2">States ({{ states|length }})</div>
+    <div class="eyebrow mt-4 mb-2">States ({{ states|length }})</div>
     <div class="text-sm text-zinc-300 leading-relaxed">
-      {% if states %}
-        {{ states|join(", ") }}
-      {% else %}
-        <span class="text-zinc-500">—</span>
-      {% endif %}
+      {% if states %}{{ states|join(", ") }}{% else %}<span class="text-zinc-500">—</span>{% endif %}
     </div>
   </div>
 
   <!-- Volume chart -->
-  <div class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 lg:col-span-2">
-    <div class="text-xs uppercase tracking-wide text-zinc-500 mb-3">Complaints per month (last 24)</div>
+  <div class="card p-4 lg:col-span-2">
+    <div class="eyebrow mb-3">Complaints per month · last 24</div>
     {% if volume %}
       {% set max_n = volume|map(attribute='n')|max %}
-      <div class="flex items-end gap-1 h-32">
+      <div class="flex items-end gap-1 h-32" aria-hidden="true">
         {% for row in volume %}
           {% set h = (row.n / max_n * 100) if max_n else 0 %}
           <div class="flex-1 flex flex-col items-center gap-1 group" title="{{ row.month }} — {{ row.n }}">
-            <div class="w-full bg-zinc-700 group-hover:bg-rose-500 transition rounded-sm" style="height: {{ h }}%; min-height: 2px;"></div>
+            <div class="w-full {{ p.spark }} transition-colors duration-150 rounded-t-[4px]" style="height: {{ h }}%; min-height: 2px;"></div>
           </div>
         {% endfor %}
       </div>
-      <div class="flex justify-between text-xs text-zinc-500 mt-2 num">
+      <div class="flex justify-between text-xs text-zinc-500 mt-2 num font-mono">
         <span>{{ volume[0].month.strftime("%b %Y") if volume }}</span>
         <span>{{ volume[-1].month.strftime("%b %Y") if volume }}</span>
       </div>
+      <details class="mt-3 group">
+        <summary class="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1 rounded"><span class="transition-transform duration-150 group-open:rotate-90" aria-hidden="true">▸</span> View as table</summary>
+        <table class="mt-2 w-full text-xs num max-w-sm">
+          <thead class="text-zinc-500"><tr><th scope="col" class="text-left font-medium py-1">Month</th><th scope="col" class="text-right font-medium py-1">Complaints</th></tr></thead>
+          <tbody class="divide-y divide-zinc-800/60 text-zinc-300">{% for row in volume %}<tr><td class="py-1">{{ row.month.strftime("%b %Y") }}</td><td class="text-right py-1">{{ row.n }}</td></tr>{% endfor %}</tbody>
+        </table>
+      </details>
     {% else %}
-      <div class="text-sm text-zinc-500">No data in window.</div>
+      <div class="text-sm text-zinc-500">No complaints in the last 24 months.</div>
     {% endif %}
   </div>
 </div>
 
 <!-- Viability memo card (HTMX swappable) -->
-<div id="memo-card">
-  {% include "_memo_card.html" %}
-</div>
+{% include "_memo_card.html" %}
 
 <!-- Raw complaints -->
-<div class="bg-zinc-900/40 border border-zinc-800 rounded-xl overflow-hidden mt-8">
+<div class="card overflow-hidden mt-8">
   <div class="px-4 py-3 border-b border-zinc-800 text-xs text-zinc-500 flex items-center justify-between">
-    <span>Raw complaints — {{ "{:,}".format(total_complaints) }} total</span>
-    <span>page {{ page }} of {{ last_page }}</span>
+    <span>Complaints · <span class="num text-zinc-300">{{ "{:,}".format(total_complaints) }}</span> total</span>
+    <span class="num">Page {{ page }} of {{ last_page }}</span>
   </div>
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
-      <thead class="text-xs text-zinc-500 uppercase tracking-wide bg-zinc-900/40">
+      <caption class="sr-only">Individual NHTSA complaints in this cluster, newest first.</caption>
+      <thead class="text-[11px] font-display text-zinc-500 uppercase tracking-wider bg-zinc-950/40">
         <tr>
-          <th class="text-left px-4 py-2.5 font-medium">Filed</th>
-          <th class="text-left px-4 py-2.5 font-medium">State</th>
-          <th class="text-center px-4 py-2.5 font-medium">Crash</th>
-          <th class="text-right px-4 py-2.5 font-medium">Inj</th>
-          <th class="text-right px-4 py-2.5 font-medium">Dth</th>
-          <th class="text-left px-4 py-2.5 font-medium">Description</th>
+          <th scope="col" class="text-left px-4 py-2.5 font-medium">Filed</th>
+          <th scope="col" class="text-left px-4 py-2.5 font-medium">State</th>
+          <th scope="col" class="text-center px-4 py-2.5 font-medium">Crash</th>
+          <th scope="col" class="text-right px-4 py-2.5 font-medium" title="Injuries">Inj</th>
+          <th scope="col" class="text-right px-4 py-2.5 font-medium" title="Deaths">Dth</th>
+          <th scope="col" class="text-left px-4 py-2.5 font-medium">Description</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-zinc-800/70">
+      <tbody class="divide-y divide-zinc-800/60">
         {% for c in complaints %}
         <tr class="align-top">
           <td class="px-4 py-3 num text-zinc-400 whitespace-nowrap">{{ c.date_complaint_filed or "—" }}</td>
           <td class="px-4 py-3 text-zinc-300">{{ c.state or "—" }}</td>
-          <td class="px-4 py-3 text-center text-zinc-400">{% if c.crash %}<span class="text-rose-400">●</span>{% else %}<span class="text-zinc-700">●</span>{% endif %}</td>
+          <td class="px-4 py-3 text-center">{% if c.crash %}<span class="text-rose-400" aria-label="Crash">●</span>{% else %}<span class="text-zinc-700" aria-label="No crash">●</span>{% endif %}</td>
           <td class="px-4 py-3 text-right num {% if c.injuries %}text-rose-300{% else %}text-zinc-600{% endif %}">{{ c.injuries }}</td>
           <td class="px-4 py-3 text-right num {% if c.deaths %}text-rose-400 font-medium{% else %}text-zinc-600{% endif %}">{{ c.deaths }}</td>
           <td class="px-4 py-3 text-zinc-300 max-w-2xl">
             <details class="group">
-              <summary class="cursor-pointer list-none">
+              <summary class="cursor-pointer rounded">
                 {{ (c.description or "")[:240] }}{% if c.description and c.description|length > 240 %}…{% endif %}
               </summary>
               {% if c.description and c.description|length > 240 %}
@@ -132,19 +143,19 @@
     </table>
   </div>
   {% if last_page > 1 %}
-  <div class="px-4 py-3 border-t border-zinc-800 flex justify-between items-center text-sm">
+  <nav class="px-4 py-3 border-t border-zinc-800 flex justify-between items-center text-sm" aria-label="Pagination">
     {% if page > 1 %}
-      <a href="?page={{ page - 1 }}" class="text-zinc-400 hover:text-zinc-100 transition">← Previous</a>
+      <a href="?page={{ page - 1 }}" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-150 rounded">← Previous</a>
     {% else %}
       <span class="text-zinc-600">← Previous</span>
     {% endif %}
-    <span class="text-zinc-500">{{ page }} / {{ last_page }}</span>
+    <span class="text-zinc-500 num">{{ page }} / {{ last_page }}</span>
     {% if page < last_page %}
-      <a href="?page={{ page + 1 }}" class="text-zinc-400 hover:text-zinc-100 transition">Next →</a>
+      <a href="?page={{ page + 1 }}" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-150 rounded">Next →</a>
     {% else %}
       <span class="text-zinc-600">Next →</span>
     {% endif %}
-  </div>
+  </nav>
   {% endif %}
 </div>
 {% endblock %}

@@ -53,3 +53,6 @@ vendor/*/*.egg-info/
 # Logs
 *.log
 logs/
+
+# Node toolchain (Tailwind build only; compiled CSS is committed)
+node_modules/

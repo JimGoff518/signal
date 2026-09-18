@@ -1,6 +1,7 @@
 """SIGNAL FastAPI dashboard.
 
-Server-rendered Jinja templates + HTMX for interactivity. Tailwind via CDN.
+Server-rendered Jinja templates + HTMX for interactivity. Tailwind is compiled
+ahead of time into web/static/app.css (see tailwind.config.js / package.json).
 Replaces src/signalwarn/app.py (Streamlit).
 
 Run locally:
@@ -24,7 +25,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from signalwarn.config import settings
 from signalwarn.migrations import apply_pending
 from signalwarn.viability import regenerate_memo_if_needed
-from web import queries
+from web import charts, queries
 
 log = logging.getLogger(__name__)
 
@@ -69,16 +70,54 @@ def _ticker_ctx() -> dict:
     return {"ticker": queries.header_stats()}
 
 
-CLASSIFICATION_BADGE = {
-    "CRITICAL": ("CRITICAL", "bg-rose-500/15 text-rose-300 ring-rose-500/30"),
-    "HOT":      ("HOT",      "bg-orange-500/15 text-orange-300 ring-orange-500/30"),
-    "WATCH":    ("WATCH",    "bg-amber-500/15 text-amber-300 ring-amber-500/30"),
-    "MONITOR":  ("MONITOR",  "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"),
-    "NOISE":    ("NOISE",    "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30"),
+# One palette, every template. Values are full Tailwind class strings (never
+# fragments) so the compiler's content scan of this file emits them — the
+# templates must not build class names by string concatenation.
+CLASSIFICATION_PALETTE: dict[str, dict[str, str]] = {
+    "CRITICAL": {
+        "text": "text-rose-400", "dot": "bg-rose-400", "bar": "bg-rose-500",
+        "spark": "bg-rose-400/40 hover:bg-rose-400",
+        "spark_stat": "bg-rose-400/30 group-hover:bg-rose-400/60",
+        "halo": "stat-halo-rose",
+        "badge": "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+        "hex": "#fb7185",
+    },
+    "HOT": {
+        "text": "text-orange-400", "dot": "bg-orange-400", "bar": "bg-orange-500",
+        "spark": "bg-orange-400/40 hover:bg-orange-400",
+        "spark_stat": "bg-orange-400/30 group-hover:bg-orange-400/60",
+        "halo": "stat-halo-orange",
+        "badge": "bg-orange-500/15 text-orange-300 ring-orange-500/30",
+        "hex": "#fb923c",
+    },
+    "WATCH": {
+        "text": "text-amber-400", "dot": "bg-amber-400", "bar": "bg-amber-500",
+        "spark": "bg-amber-400/40 hover:bg-amber-400",
+        "spark_stat": "bg-amber-400/30 group-hover:bg-amber-400/60",
+        "halo": "stat-halo-amber",
+        "badge": "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+        "hex": "#fbbf24",
+    },
+    "MONITOR": {
+        "text": "text-emerald-400", "dot": "bg-emerald-400", "bar": "bg-emerald-500",
+        "spark": "bg-emerald-400/40 hover:bg-emerald-400",
+        "spark_stat": "bg-emerald-400/30 group-hover:bg-emerald-400/60",
+        "halo": "stat-halo-emerald",
+        "badge": "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+        "hex": "#34d399",
+    },
+    "NOISE": {
+        "text": "text-zinc-400", "dot": "bg-zinc-400", "bar": "bg-zinc-500",
+        "spark": "bg-zinc-400/40 hover:bg-zinc-400",
+        "spark_stat": "bg-zinc-400/30 group-hover:bg-zinc-400/60",
+        "halo": "",
+        "badge": "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
+        "hex": "#98a2ba",
+    },
 }
 CLASSIFICATION_ORDER = ("CRITICAL", "HOT", "WATCH", "MONITOR")
 
-templates.env.globals["CLASSIFICATION_BADGE"] = CLASSIFICATION_BADGE
+templates.env.globals["PALETTE"] = CLASSIFICATION_PALETTE
 templates.env.globals["CLASSIFICATION_ORDER"] = CLASSIFICATION_ORDER
 templates.env.globals["ACTIVITY_WINDOWS"] = queries.ACTIVITY_WINDOWS
 
@@ -145,7 +184,10 @@ def dashboard(
     # Accept str so the empty-string the filter form submits when "All years"
     # is selected (year=) parses cleanly. Coerce to int below.
     year: str | None = Query(None),
+    component: str | None = Query(None),
     classification: str | None = Query(None),
+    recall: str | None = Query(None),
+    filed: str | None = Query(None),
     q: str | None = Query(None),
     sort: str = Query("score"),
     direction: str = Query("desc"),
@@ -164,12 +206,19 @@ def dashboard(
         direction = "desc"
     window_days = queries.ACTIVITY_WINDOWS.get(window)
     offset = (page - 1) * PAGE_SIZE
-    clusters, total = queries.list_clusters(
+    # Every query below that has to agree with the table shares this slice.
+    active_filters = dict(
         activity_window_days=window_days,
         make=make,
         model_year=year_int,
+        component=component,
         classification=classification,
+        recall=recall,
+        filed=filed,
         search=q,
+    )
+    clusters, total = queries.list_clusters(
+        **active_filters,
         sort=sort,
         direction=direction,
         limit=PAGE_SIZE,
@@ -178,6 +227,7 @@ def dashboard(
     counts = queries.classification_counts(activity_window_days=window_days)
     last_page = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     stat_sparks = queries.classification_sparklines(months=12)
+    chart_ctx = _chart_context(stat_sparks, active_filters)
 
     sparklines = queries.sparklines_for_clusters(
         [c["id"] for c in clusters], months=12
@@ -197,7 +247,8 @@ def dashboard(
     # clicking a header keeps the filter context.
     filter_params = {
         "window": window, "make": make or "", "year": year_int or "",
-        "classification": classification or "", "q": q or "",
+        "component": component or "", "classification": classification or "",
+        "recall": recall or "", "filed": filed or "", "q": q or "",
     }
     filters_qs = urlencode({k: v for k, v in filter_params.items() if v})
     # Filters + sort/direction — used by pagination links so the page stays sorted.
@@ -220,9 +271,13 @@ def dashboard(
             "stat_sparks": stat_sparks,
             "makes": queries.all_makes(),
             "years": queries.all_years(),
+            "components": queries.all_components(),
             "selected_window": window,
             "selected_make": make,
             "selected_year": year_int,
+            "selected_component": component,
+            "selected_recall": recall or "",
+            "selected_filed": filed or "",
             "selected_sort": sort,
             "selected_direction": direction,
             "sort_default_dir": queries.SORT_DEFAULT_DIR,
@@ -234,9 +289,68 @@ def dashboard(
             "base_qs": base_qs,
             "filters_qs": filters_qs,
             "last_ingestion": queries.last_ingestion(),
+            **chart_ctx,
             **_ticker_ctx(),
         },
     )
+
+
+# Chart geometry (SVG viewBox units). Kept next to the route so the template
+# only ever draws what it is handed.
+VOLUME_W, VOLUME_H, VOLUME_PAD_X, VOLUME_PAD_Y = 320, 120, 4, 8
+HBAR_MAX_W = 100  # percent of the track
+
+
+def _chart_context(stat_sparks: dict[str, list[int]], active_filters: dict) -> dict:
+    """Series + SVG geometry for the chart cards.
+
+    Volume: total monthly complaints across tracked clusters (de-emphasis
+    gray) with the score >= 70 slice (HOT + CRITICAL) as the emphasized line.
+    Two series, one hue + gray — the dataviz "emphasis" form.
+    Breakdowns: nominal categories, so one hue for every bar.
+    """
+    axis = queries.months_axis(12)
+    n = len(axis)
+    total = [sum(v[i] for v in stat_sparks.values()) for i in range(n)]
+    hot = [stat_sparks["CRITICAL"][i] + stat_sparks["HOT"][i] for i in range(n)]
+    y_max = charts.nice_max(max(total) if total else 0)
+    box = dict(width=VOLUME_W, height=VOLUME_H, y_max=y_max,
+               pad_x=VOLUME_PAD_X, pad_y=VOLUME_PAD_Y)
+    pts_total = charts.scale_points(total, **box)
+    pts_hot = charts.scale_points(hot, **box)
+    baseline = VOLUME_H - VOLUME_PAD_Y
+    inner_h = VOLUME_H - 2 * VOLUME_PAD_Y
+    tick_rows = [
+        {"value": t, "y": round(baseline - inner_h * t / y_max, 1)}
+        for t in charts.y_ticks(y_max, n=2)
+    ]
+    volume_points = [
+        {
+            "month": m, "label": m.strftime("%b"), "total": total[i], "hot": hot[i],
+            "x": pts_total[i][0], "y_total": pts_total[i][1], "y_hot": pts_hot[i][1],
+        }
+        for i, m in enumerate(axis)
+    ]
+    return {
+        "volume": {
+            "w": VOLUME_W, "h": VOLUME_H, "baseline": baseline,
+            "points": volume_points,
+            "total_path": charts.line_path(pts_total),
+            "total_area": charts.area_path(pts_total, baseline_y=baseline),
+            "hot_path": charts.line_path(pts_hot),
+            "ticks": tick_rows,
+            "sum_total": sum(total), "sum_hot": sum(hot),
+        },
+        "by_component": charts.hbar_layout(
+            queries.breakdown_in_view("component", limit=7, **active_filters),
+            max_width=HBAR_MAX_W,
+        ),
+        "by_make": charts.hbar_layout(
+            queries.breakdown_in_view("make", limit=7, **active_filters),
+            max_width=HBAR_MAX_W,
+        ),
+        "signals": queries.signal_counts_in_view(**active_filters),
+    }
 
 
 # ─── Cluster detail ─────────────────────────────────────────────────────

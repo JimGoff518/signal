@@ -1,0 +1,21 @@
+{
+  "name": "signal",
+  "version": "1.0.0",
+  "description": "SIGNAL dashboard CSS build (Tailwind). Python app; Node is only used to compile web/static/app.css.",
+  "scripts": {
+    "css": "tailwindcss -i web/tailwind.css -o web/static/app.css --minify",
+    "css:watch": "tailwindcss -i web/tailwind.css -o web/static/app.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JimGoff518/signal.git"
+  },
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.11",
+    "@tailwindcss/typography": "^0.5.20",
+    "tailwindcss": "3.4"
+  },
+  "private": true
+}

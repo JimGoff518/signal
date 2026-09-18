@@ -1,0 +1,161 @@
+/* SIGNAL dashboard stylesheet — Tailwind input.
+ *
+ * Compile:  npm run css   →  web/static/app.css  (committed; Railway has no Node)
+ * Tokens:   tailwind.config.js  (ink palette, fonts, shadows, easings)
+ *
+ * Depth comes from layered shadow + one inset highlight, never from
+ * glassmorphism. Motion animates transform/opacity/color only and is
+ * fully disabled under prefers-reduced-motion.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { color-scheme: dark; scroll-padding-top: 6rem; }
+
+  body {
+    @apply bg-zinc-950 text-zinc-100 antialiased font-sans;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Ambient wash — two faint radial lights (brand rose top-left, data blue
+     top-right). Sits behind everything; ~7% alpha so text contrast is
+     unaffected. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(60% 40% at 12% -5%, rgba(251, 113, 133, 0.07), transparent 65%),
+      radial-gradient(50% 35% at 92% 0%, rgba(57, 135, 229, 0.09), transparent 60%);
+  }
+
+  ::selection { background: rgba(251, 113, 133, 0.32); }
+
+  /* One focus treatment for every control. Never removed without replacement. */
+  :focus-visible {
+    outline: 2px solid theme("colors.signal.DEFAULT");
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Windows dark mode renders native selects white-on-white without this. */
+  select, input, textarea { color-scheme: dark; background-color: theme("colors.zinc.950"); color: theme("colors.zinc.100"); }
+  option { background-color: theme("colors.zinc.900"); color: theme("colors.zinc.100"); }
+
+  h1, h2, h3 { text-wrap: balance; }
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* ── Surfaces ─────────────────────────────────────────────────────── */
+  .card       { @apply bg-zinc-900 border border-zinc-800 rounded-2xl shadow-card; }
+  .card-inset { @apply bg-zinc-950/70 border border-zinc-800 rounded-xl; }
+
+  /* ── Type roles ───────────────────────────────────────────────────── */
+  .eyebrow { @apply font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500; }
+  .num     { font-variant-numeric: tabular-nums; }
+  .kbd     { @apply inline-block px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-400 font-mono text-[11px] leading-none; }
+
+  /* ── Form controls (44px, one focus ring) ──────────────────────────── */
+  .field-label { @apply block text-xs font-medium text-zinc-400 mb-1.5; }
+  .field {
+    @apply w-full h-11 bg-zinc-950 border border-zinc-800 rounded-xl px-3 text-sm text-zinc-100
+           placeholder:text-zinc-600 transition-[border-color,box-shadow] duration-150 ease-state;
+  }
+  .field:hover { @apply border-zinc-700; }
+  .field:focus { @apply border-signal outline-none ring-4 ring-signal/20; }
+  select.field { @apply pr-9 bg-no-repeat appearance-none; background-position: right 0.75rem center; background-size: 1rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%237C8AA3' stroke-width='1.5'%3E%3Cpath d='M6 8l4 4 4-4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-zinc-100 text-zinc-950 text-sm font-semibold
+           transition-[transform,background-color] duration-150 ease-state hover:bg-white active:scale-[0.97]
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-3 rounded-xl border border-zinc-800 text-sm text-zinc-300
+           transition-[border-color,color,background-color] duration-150 ease-state hover:border-zinc-700 hover:text-zinc-100 hover:bg-zinc-900;
+  }
+  .btn-icon {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-lg text-zinc-500 transition-[color,background-color] duration-150 ease-state
+           hover:text-zinc-100 hover:bg-zinc-800;
+  }
+
+  /* ── Pills (status tags on rows) ───────────────────────────────────── */
+  .pill { @apply inline-flex items-center gap-1 font-display text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-md ring-1 ring-inset leading-none; }
+
+  /* ── Score meter: 10 segments, the signature mark ──────────────────── */
+  .meter { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px; width: 5rem; height: 6px; }
+  .meter > i { display: block; border-radius: 1px; background: theme("colors.zinc.800"); }
+  .meter > i.on { background: currentColor; box-shadow: 0 0 6px -1px currentColor; }
+
+  /* ── Table rows ────────────────────────────────────────────────────── */
+  .cluster-row { content-visibility: auto; contain-intrinsic-size: 0 56px; }
+  .cluster-row:hover { background: rgba(255, 255, 255, 0.03); }
+  .row-selected { background: rgba(255, 255, 255, 0.05) !important; box-shadow: inset 2px 0 0 0 theme("colors.signal.DEFAULT"); }
+  .row-actions { opacity: 0; transition: opacity 150ms; }
+  tr:hover .row-actions, tr:focus-within .row-actions, .row-selected .row-actions { opacity: 1; }
+
+  /* ── Stat card threshold halo (only when count > 0) ────────────────── */
+  .stat-halo-rose    { box-shadow: 0 0 0 1px rgb(244 63 94 / 0.35), 0 0 32px -10px rgb(244 63 94 / 0.45), theme("boxShadow.card"); }
+  .stat-halo-orange  { box-shadow: 0 0 0 1px rgb(249 115 22 / 0.28), 0 0 26px -10px rgb(249 115 22 / 0.35), theme("boxShadow.card"); }
+  .stat-halo-amber   { box-shadow: 0 0 0 1px rgb(245 158 11 / 0.2), theme("boxShadow.card"); }
+  .stat-halo-emerald { box-shadow: 0 0 0 1px rgb(16 185 129 / 0.14), theme("boxShadow.card"); }
+
+  /* ── Entrance stagger: KPI + chart cards (≤ 1s total) ──────────────── */
+  .reveal { opacity: 0; transform: translateY(6px); animation: reveal 320ms cubic-bezier(0, 0, 0.2, 1) forwards; }
+  .reveal:nth-child(2) { animation-delay: 60ms; }
+  .reveal:nth-child(3) { animation-delay: 120ms; }
+  .reveal:nth-child(4) { animation-delay: 180ms; }
+  .reveal:nth-child(5) { animation-delay: 240ms; }
+  @keyframes reveal { to { opacity: 1; transform: none; } }
+
+  /* ── Slide-in detail panel ─────────────────────────────────────────── */
+  #panel { transition: opacity 250ms cubic-bezier(0, 0, 0.2, 1), transform 250ms cubic-bezier(0, 0, 0.2, 1); transform: translateX(12px); opacity: 0; overscroll-behavior: contain; }
+  #panel.panel-open { transform: none; opacity: 1; }
+  @media (max-width: 1279px) {
+    #panel.panel-open { position: fixed; inset: 0; z-index: 40; margin: 0 !important; max-height: 100vh !important; border-radius: 0; overflow-y: auto; }
+    body.panel-open-mobile { overflow: hidden; }
+  }
+
+  /* ── Command palette ───────────────────────────────────────────────── */
+  #palette { transition: opacity 150ms; }
+  #palette.palette-hidden { opacity: 0; pointer-events: none; }
+  .palette-result.active { background: rgba(255, 255, 255, 0.06); }
+
+  /* ── Wave-pulse loader for memo regeneration ───────────────────────── */
+  .htmx-request .memo-btn-label { display: none; }
+  .htmx-request .wave-loader { display: inline-flex !important; }
+  .wave-loader { display: inline-flex; align-items: center; gap: 4px; }
+  .wave-dot { width: 5px; height: 5px; border-radius: 50%; background: theme("colors.signal.DEFAULT"); animation: wave 1.4s ease-in-out infinite; }
+  .wave-dot:nth-child(2) { animation-delay: 0.2s; }
+  .wave-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes wave { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
+
+  /* ── LIVE pulse in the ticker ──────────────────────────────────────── */
+  .live-pulse { animation: livePulse 2s ease-in-out infinite; }
+  @keyframes livePulse {
+    0%, 100% { opacity: 0.45; transform: scale(0.9); box-shadow: 0 0 0 0 rgb(251 113 133 / 0.5); }
+    50% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 4px rgb(251 113 133 / 0); }
+  }
+
+  /* ── Chart chrome ──────────────────────────────────────────────────── */
+  .chart-tip { @apply pointer-events-none absolute z-20 rounded-lg border border-zinc-800 bg-zinc-950/95 px-2.5 py-2 text-xs shadow-raised; min-width: 8rem; }
+  .chart-tip[hidden] { display: none; }
+  .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}

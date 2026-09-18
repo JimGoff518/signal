@@ -26,8 +26,9 @@ Use the project venv's Python (`.venv/Scripts/python.exe` on Windows, `.venv/bin
 | Bulk historical seed | `.venv/Scripts/python.exe scripts/historical_import.py` |
 | Mirror NHTSA datasets | `.venv/Scripts/python.exe scripts/download_nhtsa_datasets.py` |
 | Local Postgres up/down | `docker compose up -d` / `docker compose down -v` |
+| Rebuild dashboard CSS | `npm install` once, then `npm run css` (or `npm run css:watch`) |
 
-There is no separate "build" step — `pip install -e .` makes `signalwarn` importable across the project.
+There is no Python build step — `pip install -e .` makes `signalwarn` importable across the project. The only compiled asset is the dashboard stylesheet: Tailwind is compiled ahead of time into `web/static/app.css`, which is **committed** (Railway's image has no Node). Run `npm run css` after touching any template or `web/tailwind.css` / `tailwind.config.js`, and commit the result.
 
 ## Architecture (the big picture)
 
@@ -83,5 +84,5 @@ The pipeline is invoked two ways:
 
 - The user's harness blocks production-affecting commands (`railway up`, `railway run` against prod DB, `railway ssh`). Tell the user the exact command to run themselves; don't loop trying variants.
 - Don't read `.env` or run `railway variables` — secrets land in transcript.
-- New UI work goes in [web/templates/](web/templates/) (Jinja). The CDN-Tailwind config and the htmx initialiser live in `base.html`.
+- New UI work goes in [web/templates/](web/templates/) (Jinja). Design tokens live in `tailwind.config.js`, component classes (`.card`, `.field`, `.meter`, `.pill`, `.eyebrow`) in `web/tailwind.css`; rebuild with `npm run css`. Never build Tailwind class names by string concatenation in templates — the compiler can't see them. Tier colors come from the `PALETTE` template global (`CLASSIFICATION_PALETTE` in `web/app.py`). Design rationale: [docs/plans/2026-09-17-dashboard-ui-refresh-design.md](docs/plans/2026-09-17-dashboard-ui-refresh-design.md).
 - When in doubt about *why* something is shaped a certain way, the SIGNAL_TECHNICAL_SPEC.md is the authoritative source — the code has comments tagged with section numbers (`§7.2`, etc.) that point back to it.

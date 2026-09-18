@@ -70,28 +70,31 @@ def _build_order_by(sort: str, direction: str) -> str:
     return f"{expr} {direction} {nulls}"
 
 
-def list_clusters(
+def _build_filters(
     *,
-    activity_window_days: int | None = 180,
+    activity_window_days: int | None = None,
     make: str | None = None,
     model_year: int | None = None,
+    component: str | None = None,
     classification: str | None = None,
+    recall: str | None = None,
+    filed: str | None = None,
     search: str | None = None,
-    sort: str = "score",
-    direction: str = "desc",
-    limit: int = 50,
-    offset: int = 0,
-) -> tuple[list[dict[str, Any]], int]:
-    """Return (rows, total_count) for the dashboard, applying optional filters.
+) -> tuple[str, dict[str, Any]]:
+    """Translate dashboard filter inputs into a WHERE clause + params.
 
-    Always paginated — rendering thousands of HTML rows freezes the browser.
+    Pure function (no DB) so it can be unit-tested. Every query that has to
+    agree with the dashboard table (counts, charts) goes through here so the
+    numbers on screen always describe the same slice.
+
+    `recall` / `filed` are tri-state strings from the form: "1" = only rows
+    with the flag, "0" = only rows without it, anything else = no filter.
     """
     # Hide clusters whose class action was terminated (settled, dismissed, SJ
     # for defendant, or otherwise resolved). Class counsel has already been
-    # chosen / case is closed → no opportunity for a new firm to make money,
-    # so these are pure noise on the dashboard. Pending class actions stay
-    # visible (with the -30 score penalty) so Jim can see what's been filed
-    # but isn't yet resolved.
+    # chosen / case is closed -> no opportunity for a new firm, so these are
+    # pure noise on the dashboard. Pending class actions stay visible (with the
+    # -30 score penalty) so Jim can see what's been filed but isn't resolved.
     where = [
         "c.classification != 'NOISE'",
         "(c.class_action_status IS NULL OR c.class_action_status = 'pending')",
@@ -110,9 +113,23 @@ def list_clusters(
         where.append("c.model_year = %(year)s")
         params["year"] = model_year
 
+    if component:
+        where.append("c.component = %(component)s")
+        params["component"] = component.upper()
+
     if classification and classification != "ALL":
         where.append("c.classification = %(classification)s")
         params["classification"] = classification.upper()
+
+    if recall == "1":
+        where.append("c.recall_issued = TRUE")
+    elif recall == "0":
+        where.append("c.recall_issued = FALSE")
+
+    if filed == "1":
+        where.append("c.class_action_filed = TRUE")
+    elif filed == "0":
+        where.append("c.class_action_filed = FALSE")
 
     if search:
         where.append(
@@ -122,7 +139,38 @@ def list_clusters(
         )
         params["q"] = f"%{search.lower()}%"
 
-    where_sql = " AND ".join(where)
+    return " AND ".join(where), params
+
+
+def list_clusters(
+    *,
+    activity_window_days: int | None = 180,
+    make: str | None = None,
+    model_year: int | None = None,
+    component: str | None = None,
+    classification: str | None = None,
+    recall: str | None = None,
+    filed: str | None = None,
+    search: str | None = None,
+    sort: str = "score",
+    direction: str = "desc",
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], int]:
+    """Return (rows, total_count) for the dashboard, applying optional filters.
+
+    Always paginated — rendering thousands of HTML rows freezes the browser.
+    """
+    where_sql, params = _build_filters(
+        activity_window_days=activity_window_days,
+        make=make,
+        model_year=model_year,
+        component=component,
+        classification=classification,
+        recall=recall,
+        filed=filed,
+        search=search,
+    )
     order_by = _build_order_by(sort, direction)
 
     with connection() as conn, conn.cursor() as cur:
@@ -135,7 +183,9 @@ def list_clusters(
                    c.complaint_count, c.injury_count, c.death_count, c.crash_count,
                    c.fire_count, c.velocity_30d, c.score, c.classification,
                    c.first_complaint_date, c.last_complaint_date,
-                   c.recall_issued, c.nhtsa_investigation_open
+                   c.recall_issued, c.nhtsa_investigation_open,
+                   c.class_action_filed, c.class_action_status,
+                   (c.viability_memo IS NOT NULL) AS has_memo
               FROM clusters c
              WHERE {where_sql}
              ORDER BY {order_by}, c.id
@@ -144,6 +194,53 @@ def list_clusters(
             {**params, "limit": limit, "offset": offset},
         )
         return list(cur.fetchall()), total
+
+
+def breakdown_in_view(column: str, limit: int = 8, **filters: Any) -> list[dict[str, Any]]:
+    """Top-N `column` values among per-year clusters matching the current
+    dashboard filters. Feeds the "in view by component / by make" bar charts.
+
+    Per-year only (model_year IS NOT NULL): the ALL_YEARS aggregates would
+    double-count every cluster.
+    """
+    if column not in ("component", "make"):
+        raise ValueError(f"unsupported breakdown column: {column!r}")
+    where_sql, params = _build_filters(**filters)
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT c.{column} AS label, COUNT(*) AS n
+              FROM clusters c
+             WHERE {where_sql} AND c.model_year IS NOT NULL
+             GROUP BY c.{column}
+             ORDER BY n DESC, c.{column}
+             LIMIT %(limit)s
+            """,
+            {**params, "limit": limit},
+        )
+        return list(cur.fetchall())
+
+
+def signal_counts_in_view(**filters: Any) -> dict[str, int]:
+    """Manufacturer-knowledge / legal-status signals across the current slice:
+    how many per-year clusters carry a recall, an open NHTSA probe, a pending
+    class action, or an AI memo."""
+    where_sql, params = _build_filters(**filters)
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT COUNT(*)                                            AS clusters,
+                   COUNT(*) FILTER (WHERE c.recall_issued)              AS recall,
+                   COUNT(*) FILTER (WHERE c.nhtsa_investigation_open)   AS probe,
+                   COUNT(*) FILTER (WHERE c.class_action_filed)         AS filed,
+                   COUNT(*) FILTER (WHERE c.viability_memo IS NOT NULL) AS memo
+              FROM clusters c
+             WHERE {where_sql} AND c.model_year IS NOT NULL
+            """,
+            params,
+        )
+        row = cur.fetchone() or {}
+        return {k: int(v or 0) for k, v in row.items()}
 
 
 def classification_counts(activity_window_days: int | None = 180) -> dict[str, int]:
@@ -235,6 +332,21 @@ def complaints_per_month(cluster_id: int, months: int = 24) -> list[dict[str, An
         return list(cur.fetchall())
 
 
+def months_axis(months: int) -> list[date]:
+    """First-of-month dates covering the last `months` months through today.
+
+    Shared by every monthly bucketed query so sparklines, the volume chart and
+    their x-axis labels always agree on the buckets.
+    """
+    cursor = date.today().replace(day=1)
+    axis: list[date] = []
+    for _ in range(months):
+        axis.append(cursor)
+        cursor = (cursor.replace(day=1) - timedelta(days=1)).replace(day=1)
+    axis.reverse()
+    return axis
+
+
 def sparklines_for_clusters(
     cluster_ids: list[int], months: int = 12
 ) -> dict[int, list[int]]:
@@ -243,7 +355,8 @@ def sparklines_for_clusters(
     """
     if not cluster_ids:
         return {}
-    floor = date.today().replace(day=1) - timedelta(days=months * 31)
+    axis = months_axis(months)
+    floor = axis[0]
 
     with connection() as conn, conn.cursor() as cur:
         cur.execute(
@@ -263,19 +376,8 @@ def sparklines_for_clusters(
         rows = cur.fetchall()
 
     # Build a list of `months` buckets for each cluster, zero-filled.
-    months_axis: list[date] = []
-    cursor = floor.replace(day=1)
-    today_first = date.today().replace(day=1)
-    while cursor <= today_first:
-        months_axis.append(cursor)
-        # advance to next month
-        if cursor.month == 12:
-            cursor = cursor.replace(year=cursor.year + 1, month=1)
-        else:
-            cursor = cursor.replace(month=cursor.month + 1)
-
-    out: dict[int, list[int]] = {cid: [0] * len(months_axis) for cid in cluster_ids}
-    index_for_month = {m: i for i, m in enumerate(months_axis)}
+    out: dict[int, list[int]] = {cid: [0] * len(axis) for cid in cluster_ids}
+    index_for_month = {m: i for i, m in enumerate(axis)}
     for r in rows:
         idx = index_for_month.get(r["month"])
         if idx is not None:
@@ -288,7 +390,8 @@ def classification_sparklines(months: int = 12) -> dict[str, list[int]]:
     clusters currently classified at that level. Only counts per-year clusters
     (excludes the cross-year aggregates) so each complaint is counted once.
     """
-    floor = date.today().replace(day=1) - timedelta(days=months * 31)
+    axis = months_axis(months)
+    floor = axis[0]
     with connection() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -308,19 +411,10 @@ def classification_sparklines(months: int = 12) -> dict[str, list[int]]:
         )
         rows = cur.fetchall()
 
-    months_axis: list[date] = []
-    cursor = floor.replace(day=1)
-    today_first = date.today().replace(day=1)
-    while cursor <= today_first:
-        months_axis.append(cursor)
-        if cursor.month == 12:
-            cursor = cursor.replace(year=cursor.year + 1, month=1)
-        else:
-            cursor = cursor.replace(month=cursor.month + 1)
-    index_for_month = {m: i for i, m in enumerate(months_axis)}
+    index_for_month = {m: i for i, m in enumerate(axis)}
 
     out: dict[str, list[int]] = {
-        c: [0] * len(months_axis)
+        c: [0] * len(axis)
         for c in ("CRITICAL", "HOT", "WATCH", "MONITOR")
     }
     for r in rows:
@@ -357,6 +451,15 @@ def all_makes() -> list[str]:
             "SELECT DISTINCT make FROM clusters WHERE classification != 'NOISE' ORDER BY make"
         )
         return [r["make"] for r in cur.fetchall()]
+
+
+def all_components() -> list[str]:
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT component FROM clusters "
+            "WHERE classification != 'NOISE' ORDER BY component"
+        )
+        return [r["component"] for r in cur.fetchall()]
 
 
 def all_years() -> list[int]:

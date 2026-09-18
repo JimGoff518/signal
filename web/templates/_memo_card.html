@@ -1,25 +1,27 @@
-<div id="memo-card" class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5">
-  <div class="flex items-center justify-between mb-3">
-    <div class="text-xs uppercase tracking-wide text-zinc-500">AI viability memo</div>
+<div id="memo-card" class="card-inset p-4 md:p-5">
+  <div class="flex items-center justify-between gap-3 mb-3">
+    <div class="eyebrow">AI viability memo</div>
     <button
+      type="button"
       hx-post="/cluster/{{ cluster.id }}/regenerate-memo"
       hx-target="#memo-card"
       hx-swap="outerHTML"
       hx-disabled-elt="this"
-      class="memo-btn text-xs text-zinc-400 hover:text-zinc-100 transition border border-zinc-800 rounded-md px-2 py-1 inline-flex items-center gap-1.5">
-      <span class="memo-btn-label">Regenerate</span>
+      class="memo-btn btn-ghost h-8 px-2.5 text-xs">
+      <span class="memo-btn-label">{% if cluster.viability_memo %}Regenerate memo{% else %}Draft memo{% endif %}</span>
       <span class="wave-loader hidden" aria-hidden="true">
         <span class="wave-dot"></span><span class="wave-dot"></span><span class="wave-dot"></span>
       </span>
+      <span class="sr-only htmx-indicator">Drafting…</span>
     </button>
   </div>
 
   {% if cluster.viability_memo %}
     <div class="prose prose-invert prose-sm max-w-none text-zinc-300 whitespace-pre-wrap leading-relaxed">{{ cluster.viability_memo }}</div>
-    <div class="text-xs text-zinc-600 mt-3 num">Generated: {{ cluster.memo_generated_at.strftime("%b %-d, %Y %I:%M %p") if cluster.memo_generated_at else "—" }}</div>
+    <div class="text-xs text-zinc-500 mt-3 num">Generated {% if cluster.memo_generated_at %}{{ cluster.memo_generated_at.strftime("%b") }} {{ cluster.memo_generated_at.day }}, {{ cluster.memo_generated_at.strftime("%Y %I:%M %p") }}{% else %}—{% endif %}</div>
   {% else %}
-    <div class="text-sm text-zinc-500">
-      No memo generated yet. Click <span class="text-zinc-300">Regenerate</span> to have Claude draft one.
-    </div>
+    <p class="text-sm text-zinc-500">
+      No memo yet. <span class="text-zinc-300">Draft memo</span> asks Claude to assess Rule 23 viability for this cluster.
+    </p>
   {% endif %}
 </div>

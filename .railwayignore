@@ -38,3 +38,6 @@ desktop.ini
 .env
 .env.*
 !.env.example
+
+# Node toolchain for the Tailwind build — compiled CSS is committed, Node never ships
+node_modules/
