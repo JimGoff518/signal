@@ -402,6 +402,28 @@ Poll this endpoint weekly. If a make/model/year matches an open cluster, set `nh
 - Recalculate scores for all clusters every time new complaints are ingested
 - Recalculate all scores once daily regardless of new ingestion (catches velocity changes)
 
+### 7.6 Exclusions (added 2026-09-18)
+Two rules keep dead opportunities out of the counts and off the dashboard. Full
+rationale in `docs/plans/2026-09-18-sol-and-filed-exclusion-design.md`.
+
+**Statute of limitations — complaint level.** A complaint counts toward a
+cluster only while it is a live claim: its accrual date (`date_of_incident`,
+falling back to `date_complaint_filed`; undated complaints are kept) is within
+the last `SOL_YEARS` years (default 4 = UCC 2-725 warranty limitations, which
+Magnuson-Moss borrows, and Texas contract claims). Every §7.2 input —
+numerosity, velocity, severity counts, multi-year — is computed over live
+complaints only. Time-barred complaints stay attached to the cluster and are
+counted in `clusters.time_barred_count`. Because the window is relative to
+today, every ingestion run rescores all clusters; a cluster whose complaints
+have all aged out becomes score 0 / NOISE.
+
+**Filed class action — cluster level.** Any cluster with
+`class_action_filed = TRUE`, pending *or* terminated, is excluded from the
+dashboard, tier counts, header stats, memo generation, the daily digest and
+death alerts (shared predicate `signalwarn.clustering.EXCLUDE_FILED_SQL`). The
+dashboard's "Class action → Show filed only" view exists for auditing. The −30
+penalty in §7.2 remains but no longer affects what is shown.
+
 ---
 
 ## 8. CLAUDE API INTEGRATION — VIABILITY MEMO

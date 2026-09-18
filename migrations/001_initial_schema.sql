@@ -119,4 +119,9 @@ CREATE INDEX IF NOT EXISTS idx_clusters_class_action_filed
 CREATE INDEX IF NOT EXISTS idx_clusters_class_action_status
   ON clusters (class_action_status) WHERE class_action_status IS NOT NULL;
 
+-- Statute of limitations (added 2026-09-18). Complaints whose accrual date is
+-- older than SOL_YEARS stay attached to the cluster but no longer count toward
+-- any aggregate; this column records how many were set aside.
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS time_barred_count INTEGER NOT NULL DEFAULT 0;
+
 COMMIT;

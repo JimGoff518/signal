@@ -21,7 +21,7 @@
     <span class="text-sm text-zinc-400 num font-mono">Score {{ cluster.score }}/100</span>
     {% if cluster.recall_issued %}<span class="pill text-amber-300 ring-amber-500/30">Recall issued</span>{% endif %}
     {% if cluster.nhtsa_investigation_open %}<span class="pill text-orange-300 ring-orange-500/30">NHTSA probe open</span>{% endif %}
-    {% if cluster.class_action_filed %}<span class="pill text-rose-300 ring-rose-500/30">Class action pending</span>{% endif %}
+    {% if cluster.class_action_filed %}<span class="pill text-rose-300 ring-rose-500/30">Class action {{ cluster.class_action_status or 'filed' }}</span>{% endif %}
   </div>
   <h1 class="font-display text-3xl font-semibold tracking-tight">{{ vehicle }}</h1>
   <p class="text-zinc-400 mt-1">{{ cluster.component }}</p>
@@ -50,6 +50,12 @@
   </div>
   {% endfor %}
 </div>
+{% if cluster.time_barred_count %}
+<p class="text-sm text-zinc-400 -mt-3 mb-6">
+<span class="num text-zinc-300">{{ "{:,}".format(cluster.time_barred_count) }} time-barred</span> complaint{{ '' if cluster.time_barred_count == 1 else 's' }}
+  (incident older than {{ SOL_YEARS }} years) still listed below but not counted toward the score.
+</p>
+{% endif %}
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
   <!-- Span + states -->

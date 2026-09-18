@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
+from signalwarn.clustering import EXCLUDE_FILED_SQL
 from signalwarn.db import connection
 
 # Activity-window options shown in the filter dropdown. Keys are the labels;
@@ -90,15 +91,10 @@ def _build_filters(
     `recall` / `filed` are tri-state strings from the form: "1" = only rows
     with the flag, "0" = only rows without it, anything else = no filter.
     """
-    # Hide clusters whose class action was terminated (settled, dismissed, SJ
-    # for defendant, or otherwise resolved). Class counsel has already been
-    # chosen / case is closed -> no opportunity for a new firm, so these are
-    # pure noise on the dashboard. Pending class actions stay visible (with the
-    # -30 score penalty) so Jim can see what's been filed but isn't resolved.
-    where = [
-        "c.classification != 'NOISE'",
-        "(c.class_action_status IS NULL OR c.class_action_status = 'pending')",
-    ]
+    # Any cluster with a filed class action (pending or terminated) is not an
+    # opportunity for the firm, so it is excluded by default. `filed="1"` is
+    # the audit view that shows ONLY those clusters; `filed="0"` is the default.
+    where = ["c.classification != 'NOISE'"]
     params: dict[str, Any] = {}
 
     if activity_window_days is not None:
@@ -128,8 +124,8 @@ def _build_filters(
 
     if filed == "1":
         where.append("c.class_action_filed = TRUE")
-    elif filed == "0":
-        where.append("c.class_action_filed = FALSE")
+    else:
+        where.append(EXCLUDE_FILED_SQL)
 
     if search:
         where.append(
@@ -223,40 +219,48 @@ def breakdown_in_view(column: str, limit: int = 8, **filters: Any) -> list[dict[
 
 def signal_counts_in_view(**filters: Any) -> dict[str, int]:
     """Manufacturer-knowledge / legal-status signals across the current slice:
-    how many per-year clusters carry a recall, an open NHTSA probe, a pending
-    class action, or an AI memo."""
+    how many per-year clusters carry a recall, an open NHTSA probe, or an AI
+    memo. `filed` is counted with the filed-case exclusion lifted, since those
+    clusters are hidden from the slice by default and the number feeds the
+    "class action" audit link."""
     where_sql, params = _build_filters(**filters)
+    filed_where, filed_params = _build_filters(**{**filters, "filed": "1"})
     with connection() as conn, conn.cursor() as cur:
         cur.execute(
             f"""
             SELECT COUNT(*)                                            AS clusters,
                    COUNT(*) FILTER (WHERE c.recall_issued)              AS recall,
                    COUNT(*) FILTER (WHERE c.nhtsa_investigation_open)   AS probe,
-                   COUNT(*) FILTER (WHERE c.class_action_filed)         AS filed,
                    COUNT(*) FILTER (WHERE c.viability_memo IS NOT NULL) AS memo
               FROM clusters c
              WHERE {where_sql} AND c.model_year IS NOT NULL
             """,
             params,
         )
-        row = cur.fetchone() or {}
+        row = dict(cur.fetchone() or {})
+        cur.execute(
+            f"""
+            SELECT COUNT(*) AS filed
+              FROM clusters c
+             WHERE {filed_where} AND c.model_year IS NOT NULL
+            """,
+            filed_params,
+        )
+        row.update(cur.fetchone() or {})
         return {k: int(v or 0) for k, v in row.items()}
 
 
 def classification_counts(activity_window_days: int | None = 180) -> dict[str, int]:
-    """Counts per classification for the stats strip. Excludes clusters whose
-    class action has been terminated, mirroring the dashboard filter."""
-    where = [
-        "classification != 'NOISE'",
-        "(class_action_status IS NULL OR class_action_status = 'pending')",
-    ]
+    """Counts per classification for the stats strip. Excludes clusters with a
+    filed class action, mirroring the dashboard filter."""
+    where = ["c.classification != 'NOISE'", EXCLUDE_FILED_SQL]
     params: dict[str, Any] = {}
     if activity_window_days is not None:
-        where.append("last_complaint_date >= %(floor)s")
+        where.append("c.last_complaint_date >= %(floor)s")
         params["floor"] = date.today() - timedelta(days=activity_window_days)
     sql = f"""
-      SELECT classification, COUNT(*) AS n
-        FROM clusters
+      SELECT c.classification, COUNT(*) AS n
+        FROM clusters c
        WHERE {' AND '.join(where)}
        GROUP BY classification
     """
@@ -517,12 +521,13 @@ def header_stats() -> dict[str, Any]:
     """
     with connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-              (SELECT COUNT(*) FROM complaints)                                AS complaints_scanned,
-              (SELECT COUNT(*) FROM clusters WHERE classification != 'NOISE') AS clusters_tracked,
+              (SELECT COUNT(*) FROM complaints) AS complaints_scanned,
+              (SELECT COUNT(*) FROM clusters c
+                WHERE c.classification != 'NOISE' AND {EXCLUDE_FILED_SQL}) AS clusters_tracked,
               (SELECT COUNT(*) FROM clusters WHERE viability_memo IS NOT NULL) AS memos_written,
-              (SELECT MAX(run_at) FROM ingestion_log)                          AS last_refresh
+              (SELECT MAX(run_at) FROM ingestion_log) AS last_refresh
             """
         )
         return cur.fetchone() or {}

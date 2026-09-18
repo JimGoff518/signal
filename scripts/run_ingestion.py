@@ -1,7 +1,9 @@
 """Daily ingestion CLI.
 
-Pull new NHTSA complaints, store them, recluster, rescore, generate viability
-memos for any cluster newly at WATCH+, and send the daily digest + death alerts.
+Pull new NHTSA complaints, store them, recluster, rescore every cluster (so
+complaints that aged past the statute-of-limitations window drop out even in
+clusters that got nothing new), generate viability memos for any cluster newly
+at WATCH+ with no class action on file, and send the daily digest + death alerts.
 
 Schedule via Railway cron (02:00 CT) for production.
 
@@ -19,9 +21,9 @@ sys.path.insert(0, str((__import__("pathlib").Path(__file__).resolve().parent.pa
 
 from signalwarn.alerts import send_daily_digest, send_death_alerts  # noqa: E402
 from signalwarn.config import settings  # noqa: E402
-from signalwarn.db import connection  # noqa: E402
+from signalwarn.historical import rescore_all_clusters  # noqa: E402
 from signalwarn.ingestion import run_daily_ingestion  # noqa: E402
-from signalwarn.viability import regenerate_memo_if_needed  # noqa: E402
+from signalwarn.viability import memo_candidate_ids, regenerate_memo_if_needed  # noqa: E402
 
 
 @click.command()
@@ -35,11 +37,13 @@ def main(lookback_days: int | None, skip_memos: bool, skip_emails: bool) -> None
     result = run_daily_ingestion(lookback_days=lookback_days)
     log.info("Ingested %s, skipped %s, %s clusters touched", result.ingested, result.skipped, result.clusters_touched)
 
+    # The SOL window is relative to today, so a cluster that received no new
+    # complaints can still change (its oldest ones age out). Rescore everything.
+    n = rescore_all_clusters()
+    log.info("Rescored %s clusters (SOL window %s years)", n, settings.sol_years)
+
     if not skip_memos and settings.anthropic_api_key:
-        with connection() as conn, conn.cursor() as cur:
-            cur.execute("SELECT id FROM clusters WHERE score >= 50")
-            cluster_ids = [r["id"] for r in cur.fetchall()]
-        for cid in cluster_ids:
+        for cid in memo_candidate_ids():
             try:
                 regenerate_memo_if_needed(cid)
             except Exception as e:  # noqa: BLE001

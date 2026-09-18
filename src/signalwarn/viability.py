@@ -9,6 +9,7 @@ import logging
 
 from anthropic import Anthropic
 
+from signalwarn.clustering import EXCLUDE_FILED_SQL
 from signalwarn.config import settings
 from signalwarn.db import connection
 
@@ -121,6 +122,19 @@ def _generate_memo(cluster: dict, sample_descriptions: list[str], states: list[s
     )
     parts = [b.text for b in msg.content if getattr(b, "type", None) == "text"]
     return "\n".join(parts).strip()
+
+
+def memo_candidate_ids() -> list[int]:
+    """Clusters worth a viability memo: WATCH or better, and no class action on
+    file. A filed case (pending or terminated) means the opportunity is gone,
+    so we don't spend Claude calls on it."""
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"SELECT id FROM clusters c WHERE c.score >= %s AND {EXCLUDE_FILED_SQL} "
+            "ORDER BY c.score DESC",
+            (WATCH_THRESHOLD,),
+        )
+        return [r["id"] for r in cur.fetchall()]
 
 
 def regenerate_memo_if_needed(cluster_id: int, force: bool = False) -> bool:

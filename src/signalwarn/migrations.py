@@ -44,6 +44,13 @@ PENDING: list[tuple[str, str]] = [
           ON clusters (class_action_status) WHERE class_action_status IS NOT NULL;
         """,
     ),
+    (
+        "2026-09-18 — statute-of-limitations: time-barred complaint count",
+        """
+        ALTER TABLE clusters
+          ADD COLUMN IF NOT EXISTS time_barred_count INTEGER NOT NULL DEFAULT 0;
+        """,
+    ),
 ]
 
 
@@ -63,6 +70,6 @@ def apply_pending() -> int:
                 applied += 1
                 log.info("migration applied: %s", desc)
             conn.commit()
-    except Exception:  # noqa: BLE001
+    except Exception:
         log.exception("apply_pending failed; continuing without migration")
     return applied

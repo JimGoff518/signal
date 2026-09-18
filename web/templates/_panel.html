@@ -59,6 +59,11 @@
       </div>
       {% endfor %}
     </div>
+    {% if cluster.time_barred_count %}
+    <p class="text-xs text-zinc-500 mt-2">
+<span class="num text-zinc-400">{{ "{:,}".format(cluster.time_barred_count) }} time-barred</span> complaint{{ '' if cluster.time_barred_count == 1 else 's' }} (older than {{ SOL_YEARS }} years) not counted.
+    </p>
+    {% endif %}
 
     <!-- Span + states -->
     <div class="card-inset p-3 text-sm">

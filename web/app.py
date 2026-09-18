@@ -120,6 +120,7 @@ CLASSIFICATION_ORDER = ("CRITICAL", "HOT", "WATCH", "MONITOR")
 templates.env.globals["PALETTE"] = CLASSIFICATION_PALETTE
 templates.env.globals["CLASSIFICATION_ORDER"] = CLASSIFICATION_ORDER
 templates.env.globals["ACTIVITY_WINDOWS"] = queries.ACTIVITY_WINDOWS
+templates.env.globals["SOL_YEARS"] = settings.sol_years
 
 
 # ─── Auth ───────────────────────────────────────────────────────────────

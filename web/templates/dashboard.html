@@ -95,9 +95,8 @@
     <div>
       <label for="f-filed" class="field-label">Class action</label>
       <select id="f-filed" name="filed" class="field" onchange="this.form.submit()">
-        <option value="" {% if not selected_filed %}selected{% endif %}>Any</option>
-        <option value="0" {% if selected_filed == '0' %}selected{% endif %}>Not yet filed</option>
-        <option value="1" {% if selected_filed == '1' %}selected{% endif %}>Pending case</option>
+        <option value="" {% if selected_filed != '1' %}selected{% endif %}>Excluded</option>
+        <option value="1" {% if selected_filed == '1' %}selected{% endif %}>Show filed only</option>
       </select>
     </div>
     <div>
@@ -251,7 +250,7 @@
     <span class="flex items-center gap-x-3 gap-y-1 flex-wrap">
       <a href="/?{{ filters_qs }}{% if filters_qs %}&{% endif %}recall=1" class="hover:text-zinc-200 transition-colors duration-150 rounded"><span class="num text-amber-300">{{ "{:,}".format(signals.recall) }}</span> recall</a>
       <span><span class="num text-orange-300">{{ "{:,}".format(signals.probe) }}</span> NHTSA probe</span>
-      <a href="/?{{ filters_qs }}{% if filters_qs %}&{% endif %}filed=1" class="hover:text-zinc-200 transition-colors duration-150 rounded"><span class="num text-rose-300">{{ "{:,}".format(signals.filed) }}</span> class action pending</a>
+      <a href="/?{{ filters_qs }}{% if filters_qs %}&{% endif %}filed=1" class="hover:text-zinc-200 transition-colors duration-150 rounded"><span class="num text-rose-300">{{ "{:,}".format(signals.filed) }}</span> class action filed</a>
       <span><span class="num text-zinc-300">{{ "{:,}".format(signals.memo) }}</span> memo{{ '' if signals.memo == 1 else 's' }}</span>
     </span>
   </div>
@@ -289,7 +288,7 @@
               <span>{{ c.component }}</span>
               {% if c.recall_issued %}<span class="pill text-amber-300 ring-amber-500/30">recall</span>{% endif %}
               {% if c.nhtsa_investigation_open %}<span class="pill text-orange-300 ring-orange-500/30">probe</span>{% endif %}
-              {% if c.class_action_filed %}<span class="pill text-rose-300 ring-rose-500/30" title="A class action is pending. Score already carries the −30 penalty.">filed</span>{% endif %}
+              {% if c.class_action_filed %}<span class="pill text-rose-300 ring-rose-500/30" title="A class action is on file ({{ c.class_action_status or 'status unknown' }}). Hidden from the default view.">filed</span>{% endif %}
               {% if c.has_memo %}<span class="pill text-zinc-300 ring-zinc-700" title="AI viability memo drafted">memo</span>{% endif %}
             </div>
           </td>

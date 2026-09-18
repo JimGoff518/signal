@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     # are impossible (ON CONFLICT on odi_number), so wide is safe.
     nhtsa_lookback_days: int = Field(180, ge=1, le=365)
 
+    # Statute of limitations window, in years. A complaint whose incident date
+    # (falling back to the NHTSA filing date) is older than this no longer
+    # counts toward any cluster aggregate. Default 4 = UCC 2-725 warranty
+    # limitations (borrowed by Magnuson-Moss) and Texas contract claims.
+    # See docs/plans/2026-09-18-sol-and-filed-exclusion-design.md.
+    sol_years: int = Field(4, ge=1, le=15)
+
     # CourtListener / Free Law Project — Phase 3a class action filing detection.
     # Token is optional; the public API works unauthenticated but is rate-limited
     # (~5K req/day). Authenticated users get a much higher ceiling.

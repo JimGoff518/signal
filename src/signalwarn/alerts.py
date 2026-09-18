@@ -11,6 +11,7 @@ from datetime import date
 
 import resend
 
+from signalwarn.clustering import EXCLUDE_FILED_SQL
 from signalwarn.config import settings
 from signalwarn.db import connection
 
@@ -53,10 +54,11 @@ def send_daily_digest() -> None:
     """Send Jim the morning digest of CRITICAL + HOT clusters."""
     with connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT * FROM clusters
-             WHERE classification IN ('CRITICAL', 'HOT')
-             ORDER BY score DESC
+            f"""
+            SELECT c.* FROM clusters c
+             WHERE c.classification IN ('CRITICAL', 'HOT')
+               AND {EXCLUDE_FILED_SQL}
+             ORDER BY c.score DESC
             """
         )
         rows = cur.fetchall()
@@ -87,9 +89,10 @@ def send_death_alerts() -> None:
     """Send a one-shot alert for any cluster that just got its first death."""
     with connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT c.* FROM clusters c
              WHERE c.death_count > 0
+               AND {EXCLUDE_FILED_SQL}
                AND NOT EXISTS (
                  SELECT 1 FROM alerts_sent a
                   WHERE a.cluster_id = c.id AND a.alert_type = 'DEATH'

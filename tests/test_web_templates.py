@@ -151,7 +151,7 @@ def test_dashboard_renders_with_charts_and_filters(chart_ctx):
     # charts: volume paths + both breakdowns + signals strip
     assert '<path d="M' in html and "vol-hit" in html
     assert "By component" in html and "By make" in html
-    assert "class action pending" in html
+    assert "class action filed" in html
     # score meter renders 10 segments per row, lit count matches score
     assert html.count('<span class="meter') >= 2
     # tags: filed + memo pills, no redundant multi-year pill
@@ -288,3 +288,41 @@ def test_memos_page_renders_and_header_tab_is_active():
         ticker=None,
     )
     assert "No memos mention" in empty
+
+
+# ── SOL + filed-case exclusion (2026-09-18) ──────────────────────────────────
+
+
+def test_dashboard_class_action_filter_defaults_to_excluded(chart_ctx):
+    html = _render("dashboard.html", **_dashboard_ctx(**chart_ctx))
+    assert "Show filed only" in html
+    assert "Not yet filed" not in html and "Pending case" not in html
+    assert "penalty" not in html  # filed clusters are hidden, not penalised, in the default view
+
+
+def test_cluster_page_shows_time_barred_count():
+    ctx = dict(
+        title="x", user="jim", complaints=[], states=[], volume=[], page=1, last_page=1,
+        total_complaints=20, ticker=None,
+    )
+    html = _render("cluster.html", cluster=_cluster(complaint_count=14, time_barred_count=6), **ctx)
+    assert "6 time-barred" in html and "4 years" in html
+    html = _render("cluster.html", cluster=_cluster(time_barred_count=0), **ctx)
+    assert "time-barred" not in html
+
+
+def test_panel_shows_time_barred_count():
+    ctx = dict(complaints=[], states=[], volume=[], total_complaints=20)
+    html = _render("_panel.html", cluster=_cluster(time_barred_count=6), **ctx)
+    assert "6 time-barred" in html
+    html = _render("_panel.html", cluster=_cluster(time_barred_count=0), **ctx)
+    assert "time-barred" not in html
+
+
+def test_class_action_pill_reflects_status():
+    ctx = dict(
+        title="x", user="jim", complaints=[], states=[], volume=[], page=1, last_page=1,
+        total_complaints=0, ticker=None,
+    )
+    html = _render("cluster.html", cluster=_cluster(class_action_status="terminated"), **ctx)
+    assert "Class action terminated" in html and "Class action pending" not in html

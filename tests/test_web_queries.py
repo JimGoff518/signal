@@ -6,11 +6,16 @@ from datetime import date
 from web import queries
 
 
-def test_build_filters_defaults_hide_noise_and_terminated():
+def test_build_filters_defaults_hide_noise_and_filed():
     where, params = queries._build_filters()
     assert "c.classification != 'NOISE'" in where
-    assert "class_action_status" in where
+    assert queries.EXCLUDE_FILED_SQL in where
+    assert "class_action_status" not in where   # status no longer matters: any filing excludes
     assert params == {}
+
+
+def test_exclude_filed_predicate_hides_pending_and_terminated():
+    assert queries.EXCLUDE_FILED_SQL == "c.class_action_filed = FALSE"
 
 
 def test_build_filters_component_recall_filed():
@@ -20,7 +25,9 @@ def test_build_filters_component_recall_filed():
     assert "c.component = %(component)s" in where
     assert params["component"] == "ENGINE"
     assert "c.recall_issued = TRUE" in where
+    # filed="1" is the audit view: show ONLY filed clusters, lifting the default exclusion
     assert "c.class_action_filed = TRUE" in where
+    assert queries.EXCLUDE_FILED_SQL not in where
 
 
 def test_build_filters_not_filed_and_no_recall():
@@ -32,7 +39,7 @@ def test_build_filters_not_filed_and_no_recall():
 def test_build_filters_ignores_blank_tristate():
     where, params = queries._build_filters(recall="", filed=None, component="")
     assert "recall_issued" not in where
-    assert "class_action_filed" not in where
+    assert queries.EXCLUDE_FILED_SQL in where   # blank = default = filed excluded
     assert "component" not in params
 
 
