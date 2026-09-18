@@ -238,6 +238,27 @@ def test_cluster_login_admin_render():
     assert 'enctype="multipart/form-data"' in html and 'name="files"' in html
 
 
+def test_admin_page_links_to_system_map():
+    """The system map is reachable from /admin and opens in a new tab."""
+    status = {
+        k: {
+            "state": "idle",
+            "started_at": None,
+            "finished_at": None,
+            "summary": None,
+            "args": None,
+            "error": None,
+        }
+        for k in ("check_filings", "rescore_all", "refresh_complaints", "ewr_import")
+    }
+    req = SimpleNamespace(query_params={})
+    html = _render("admin.html", title="x", user="jim", status=status, request=req, ticker=None)
+    assert "https://claude.ai/artifact/TFN9z6LajVTrM9c79yFEhL" in html
+    assert "System map" in html
+    assert 'target="_blank"' in html
+    assert 'rel="noopener"' in html
+
+
 def test_palette_values_are_full_class_strings():
     """Tailwind's scanner only emits classes it sees verbatim in app.py."""
     for tier, spec in webapp.CLASSIFICATION_PALETTE.items():

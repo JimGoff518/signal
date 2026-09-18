@@ -25,6 +25,21 @@
   </div>
 {% endif %}
 
+<div class="card p-5 mb-4 flex items-start justify-between gap-4 flex-wrap">
+  <div>
+    <h2 class="font-display text-lg font-semibold">System map</h2>
+    <p class="text-sm text-zinc-500 mt-1 max-w-2xl">
+      What the pipeline does at each stage, how the score is built, what gets filtered out before scoring,
+      and the research commands wired into this repo. Useful for onboarding anyone new to SIGNAL.
+    </p>
+    <p class="text-xs text-zinc-600 mt-2">
+      Hosted on claude.ai and private to Jim’s account until it’s shared from the page’s share menu.
+    </p>
+  </div>
+  <a href="https://claude.ai/artifact/TFN9z6LajVTrM9c79yFEhL" target="_blank" rel="noopener"
+     class="btn-ghost shrink-0">Open system map →</a>
+</div>
+
 {% macro task_card(task_key, title, description, action_url, button_label, extra_form_html='', enctype='') %}
   {% set s = status[task_key] %}
   <div class="card p-5">
