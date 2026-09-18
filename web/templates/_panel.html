@@ -51,6 +51,7 @@
         ('Crashes', cluster.crash_count, 'text-zinc-300'),
         ('Fires', cluster.fire_count, 'text-zinc-300' if cluster.fire_count else 'text-zinc-500'),
         ('New · 30 days', cluster.velocity_30d, 'text-zinc-300'),
+        ('Texas owners', cluster.tx_complaint_count, 'text-zinc-100' if cluster.tx_complaint_count else 'text-zinc-500'),
       ] %}
       {% for label, val, c in stats %}
       <div class="card-inset p-2.5">

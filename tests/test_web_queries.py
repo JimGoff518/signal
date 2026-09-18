@@ -59,3 +59,10 @@ def test_months_axis_exact_bucket_count_ending_this_month():
     assert axis[-1] == date.today().replace(day=1)
     assert all(d.day == 1 for d in axis)
     assert axis == sorted(axis)
+
+
+def test_build_filters_texas_minimum():
+    where, params = queries._build_filters(tx_min=5)
+    assert "c.tx_complaint_count >= %(tx_min)s" in where and params["tx_min"] == 5
+    where, params = queries._build_filters(tx_min=0)
+    assert "tx_complaint_count" not in where and "tx_min" not in params

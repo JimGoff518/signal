@@ -30,7 +30,7 @@
 {%- endmacro %}
 
 {% block content %}
-{% set filters_active = selected_make or selected_year or selected_component or selected_classification != 'ALL' or selected_recall or selected_filed or q %}
+{% set filters_active = selected_make or selected_year or selected_component or selected_classification != 'ALL' or selected_recall or selected_filed or selected_tx or q %}
 
 <!-- Page header -->
 <div class="flex items-end justify-between mb-5 flex-wrap gap-3">
@@ -47,7 +47,7 @@
 
 <!-- Filters: one row, above everything they scope. -->
 <form method="get" action="/" class="card p-3 md:p-4 mb-4" role="search" aria-label="Filter clusters">
-  <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-[repeat(8,minmax(0,1fr))_auto] gap-2 md:gap-3">
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3">
     <div>
       <label for="f-window" class="field-label">Activity window</label>
       <select id="f-window" name="window" class="field" onchange="this.form.submit()">
@@ -100,12 +100,22 @@
       </select>
     </div>
     <div>
+      <label for="f-tx" class="field-label">Texas owners</label>
+      <select id="f-tx" name="tx" class="field" onchange="this.form.submit()">
+        <option value="" {% if not selected_tx %}selected{% endif %}>Any</option>
+        <option value="1" {% if selected_tx == '1' %}selected{% endif %}>1 or more complaints</option>
+        <option value="5" {% if selected_tx == '5' %}selected{% endif %}>5 or more</option>
+        <option value="10" {% if selected_tx == '10' %}selected{% endif %}>10 or more</option>
+        <option value="25" {% if selected_tx == '25' %}selected{% endif %}>25 or more</option>
+      </select>
+    </div>
+    <div>
       <label for="f-q" class="field-label">Search</label>
       <input id="f-q" type="search" name="q" value="{{ q }}" placeholder="Make, model or component…"
              autocomplete="off" spellcheck="false" class="field" />
     </div>
-    <div class="col-span-2 md:col-span-4 xl:col-span-1 flex items-end gap-2">
-      <button type="submit" class="btn-primary flex-1 xl:flex-none">Apply</button>
+    <div class="col-span-2 md:col-span-3 lg:col-span-5 flex items-end justify-end gap-2">
+      <button type="submit" class="btn-primary">Apply</button>
       {% if filters_active %}
         <a href="/?window={{ selected_window }}" class="btn-ghost" title="Clear every filter except the activity window">Reset</a>
       {% endif %}
@@ -267,6 +277,7 @@
           {{ sort_header('Inj', 'inj', align='right', extra_class='hidden lg:table-cell', title='Injuries reported') }}
           {{ sort_header('Dth', 'dth', align='right', extra_class='hidden lg:table-cell', title='Deaths reported') }}
           {{ sort_header('New · 30d', 'velocity', align='right', extra_class='hidden lg:table-cell', title='Complaints filed in the last 30 days') }}
+          {{ sort_header('TX', 'tx', align='right', extra_class='hidden lg:table-cell', title='Complaints from Texas owners') }}
           {{ sort_header('Score', 'score', align='right', extra_class='w-36 md:w-44') }}
         </tr>
       </thead>
@@ -327,6 +338,7 @@
           <td class="px-4 py-3 align-middle text-right num hidden lg:table-cell {% if c.injury_count > 0 %}text-rose-300{% else %}text-zinc-600{% endif %}">{{ c.injury_count }}</td>
           <td class="px-4 py-3 align-middle text-right num hidden lg:table-cell {% if c.death_count > 0 %}text-rose-400 font-semibold{% else %}text-zinc-600{% endif %}">{{ c.death_count }}</td>
           <td class="px-4 py-3 align-middle text-right num text-zinc-300 hidden lg:table-cell">{{ c.velocity_30d }}</td>
+          <td class="px-4 py-3 align-middle text-right num hidden lg:table-cell {% if c.tx_complaint_count > 0 %}text-zinc-100{% else %}text-zinc-600{% endif %}">{{ c.tx_complaint_count }}</td>
           <td class="px-4 py-3 align-middle">
             <div class="flex items-center justify-end gap-2.5">
               <a href="/cluster/{{ c.id }}" target="_blank" rel="noopener"
@@ -341,7 +353,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="px-4 py-16 text-center text-zinc-500">
+        <tr><td colspan="10" class="px-4 py-16 text-center text-zinc-500">
           No clusters match these filters.
           {% if filters_active %}<a href="/?window={{ selected_window }}" class="text-zinc-200 underline underline-offset-4 ml-1 rounded">Reset filters</a>{% endif %}
         </td></tr>
@@ -606,7 +618,7 @@
   if (focusId) setTimeout(() => openPanel(parseInt(focusId)), 50);
 
   // Remember the last filter set; restore it when landing on / with no params.
-  const filterKeys = ['window', 'make', 'year', 'component', 'classification', 'recall', 'filed', 'q'];
+  const filterKeys = ['window', 'make', 'year', 'component', 'classification', 'recall', 'filed', 'tx', 'q'];
   const hasFilters = filterKeys.some(k => params.has(k));
   if (hasFilters) {
     const saved = {};

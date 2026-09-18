@@ -124,4 +124,8 @@ CREATE INDEX IF NOT EXISTS idx_clusters_class_action_status
 -- any aggregate; this column records how many were set aside.
 ALTER TABLE clusters ADD COLUMN IF NOT EXISTS time_barred_count INTEGER NOT NULL DEFAULT 0;
 
+-- Phase 2 Texas geographic filter (added 2026-09-18). Live (non-time-barred)
+-- complaints from Texas owners; maintained by clustering.recalculate_cluster.
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS tx_complaint_count INTEGER NOT NULL DEFAULT 0;
+
 COMMIT;

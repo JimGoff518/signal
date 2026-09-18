@@ -50,6 +50,7 @@ def _cluster(**over):
         viability_memo="Numerosity looks strong.",
         memo_generated_at=datetime(2026, 5, 9, 14, 3),
         has_memo=True,
+        tx_complaint_count=12,
         days_since_last=0,
         sparkline=[1, 4, 2, 0, 3],
         sparkline_max=4,
@@ -91,6 +92,7 @@ def _dashboard_ctx(**over):
         selected_component=None,
         selected_recall="",
         selected_filed="",
+        selected_tx="",
         selected_sort="score",
         selected_direction="desc",
         sort_default_dir=queries.SORT_DEFAULT_DIR,
@@ -141,6 +143,7 @@ def test_dashboard_renders_with_charts_and_filters(chart_ctx):
         "f-class",
         "f-recall",
         "f-filed",
+        "f-tx",
         "f-q",
     ):
         assert f'for="{fid}"' in html and f'id="{fid}"' in html

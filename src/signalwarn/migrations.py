@@ -51,6 +51,13 @@ PENDING: list[tuple[str, str]] = [
           ADD COLUMN IF NOT EXISTS time_barred_count INTEGER NOT NULL DEFAULT 0;
         """,
     ),
+    (
+        "2026-09-18 — Phase 2 Texas geographic filter: per-cluster TX complaint count",
+        """
+        ALTER TABLE clusters
+          ADD COLUMN IF NOT EXISTS tx_complaint_count INTEGER NOT NULL DEFAULT 0;
+        """,
+    ),
 ]
 
 

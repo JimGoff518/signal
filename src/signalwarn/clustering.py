@@ -119,6 +119,7 @@ def recalculate_cluster(conn: Connection, cluster_id: int) -> dict:
               MAX(c.date_complaint_filed) FILTER (WHERE live) AS last_complaint_date,
               COUNT(DISTINCT c.model_year) FILTER (WHERE live) AS distinct_years,
               COUNT(*) FILTER (WHERE NOT live)                AS time_barred_count
+              COUNT(*) FILTER (WHERE live AND c.state = 'TX') AS tx_complaint_count
             FROM cluster_complaints cc
             JOIN complaints c ON c.id = cc.complaint_id
             CROSS JOIN LATERAL (SELECT {LIVE_COMPLAINT_SQL} AS live) sol
@@ -166,6 +167,7 @@ def recalculate_cluster(conn: Connection, cluster_id: int) -> dict:
               last_complaint_date  = %(last_complaint_date)s,
               is_multi_year   = %(is_multi_year)s,
               time_barred_count = %(time_barred_count)s,
+              tx_complaint_count = %(tx_complaint_count)s,
               score           = %(score)s,
               classification  = %(classification)s,
               updated_at      = NOW()
@@ -184,6 +186,7 @@ def recalculate_cluster(conn: Connection, cluster_id: int) -> dict:
                 "last_complaint_date": agg.get("last_complaint_date"),
                 "is_multi_year": is_multi_year,
                 "time_barred_count": int(agg.get("time_barred_count") or 0),
+                "tx_complaint_count": int(agg.get("tx_complaint_count") or 0),
                 "score": score,
                 "classification": label,
                 "cluster_id": cluster_id,

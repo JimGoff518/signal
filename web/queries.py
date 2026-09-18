@@ -37,6 +37,7 @@ SORT_COLUMNS: dict[str, str] = {
     "inj": "c.injury_count",
     "dth": "c.death_count",
     "velocity": "c.velocity_30d",
+    "tx": "c.tx_complaint_count",
     "score": "c.score",
 }
 
@@ -50,6 +51,7 @@ SORT_DEFAULT_DIR: dict[str, str] = {
     "inj": "desc",
     "dth": "desc",
     "velocity": "desc",
+    "tx": "desc",
     "score": "desc",
 }
 
@@ -80,6 +82,7 @@ def _build_filters(
     classification: str | None = None,
     recall: str | None = None,
     filed: str | None = None,
+    tx_min: int | None = None,
     search: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Translate dashboard filter inputs into a WHERE clause + params.
@@ -127,6 +130,11 @@ def _build_filters(
     else:
         where.append(EXCLUDE_FILED_SQL)
 
+    # Phase 2 Texas filter: at least N live complaints from Texas owners.
+    if tx_min:
+        where.append("c.tx_complaint_count >= %(tx_min)s")
+        params["tx_min"] = int(tx_min)
+
     if search:
         where.append(
             "(LOWER(c.make) LIKE %(q)s "
@@ -147,6 +155,7 @@ def list_clusters(
     classification: str | None = None,
     recall: str | None = None,
     filed: str | None = None,
+    tx_min: int | None = None,
     search: str | None = None,
     sort: str = "score",
     direction: str = "desc",
@@ -165,6 +174,7 @@ def list_clusters(
         classification=classification,
         recall=recall,
         filed=filed,
+        tx_min=tx_min,
         search=search,
     )
     order_by = _build_order_by(sort, direction)
@@ -180,7 +190,7 @@ def list_clusters(
                    c.fire_count, c.velocity_30d, c.score, c.classification,
                    c.first_complaint_date, c.last_complaint_date,
                    c.recall_issued, c.nhtsa_investigation_open,
-                   c.class_action_filed, c.class_action_status,
+                   c.class_action_filed, c.class_action_status, c.tx_complaint_count,
                    (c.viability_memo IS NOT NULL) AS has_memo
               FROM clusters c
              WHERE {where_sql}

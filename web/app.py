@@ -189,6 +189,7 @@ def dashboard(
     classification: str | None = Query(None),
     recall: str | None = Query(None),
     filed: str | None = Query(None),
+    tx: str | None = Query(None),
     q: str | None = Query(None),
     sort: str = Query("score"),
     direction: str = Query("desc"),
@@ -200,6 +201,12 @@ def dashboard(
             year_int = int(year)
         except ValueError:
             year_int = None
+    tx_min: int | None = None
+    if tx:
+        try:
+            tx_min = max(0, int(tx)) or None
+        except ValueError:
+            tx_min = None
     if sort not in queries.SORT_COLUMNS:
         sort = "score"
     direction = direction.lower()
@@ -216,6 +223,7 @@ def dashboard(
         classification=classification,
         recall=recall,
         filed=filed,
+        tx_min=tx_min,
         search=q,
     )
     clusters, total = queries.list_clusters(
@@ -249,7 +257,7 @@ def dashboard(
     filter_params = {
         "window": window, "make": make or "", "year": year_int or "",
         "component": component or "", "classification": classification or "",
-        "recall": recall or "", "filed": filed or "", "q": q or "",
+        "recall": recall or "", "filed": filed or "", "tx": tx_min or "", "q": q or "",
     }
     filters_qs = urlencode({k: v for k, v in filter_params.items() if v})
     # Filters + sort/direction — used by pagination links so the page stays sorted.
@@ -280,6 +288,7 @@ def dashboard(
             "selected_component": component,
             "selected_recall": recall or "",
             "selected_filed": filed or "",
+            "selected_tx": str(tx_min) if tx_min else "",
             "selected_sort": sort,
             "selected_direction": direction,
             "sort_default_dir": queries.SORT_DEFAULT_DIR,
