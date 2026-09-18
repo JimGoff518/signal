@@ -18,6 +18,12 @@ import click
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+# Complaint narratives carry characters the Windows console code page can't
+# encode; never let a stray glyph abort the dossier.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 from signalwarn import research
 
 
