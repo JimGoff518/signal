@@ -27,7 +27,13 @@ class Settings(BaseSettings):
     alert_from_email: str = Field("signal@gofflawdfw.com")
     alert_to_email: str = Field("jim@gofflawdfw.com")
 
-    nhtsa_lookback_days: int = Field(7, ge=1, le=365)
+    # NHTSA publishes complaints weeks after they are filed, and the API has no
+    # "published since" filter — the refresh job pulls each vehicle's full list
+    # and keeps rows whose *filing* date is inside this window. A short window
+    # silently drops every late-published complaint (that is what happened
+    # between May and September 2026 with the old 7-day default). Duplicates
+    # are impossible (ON CONFLICT on odi_number), so wide is safe.
+    nhtsa_lookback_days: int = Field(180, ge=1, le=365)
 
     # CourtListener / Free Law Project — Phase 3a class action filing detection.
     # Token is optional; the public API works unauthenticated but is rate-limited

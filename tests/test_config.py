@@ -51,3 +51,8 @@ def test_empty_signal_users_falls_back():
 def test_no_credentials_returns_empty():
     s = _make_settings(signal_username="", signal_password="", signal_users="")
     assert s.users() == {}
+
+
+def test_lookback_default_is_wide_enough_for_nhtsa_publication_lag():
+    # 7 days silently dropped late-published complaints (May to Sept 2026 gap).
+    assert _make_settings().nhtsa_lookback_days >= 90

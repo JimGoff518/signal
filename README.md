@@ -92,7 +92,7 @@ Signal/
 
 ## Incremental ingestion (production)
 
-Runs as a Railway cron service (`signal` in the project) on schedule `0 7 */3 * *` UTC = **02:00 CT every 3 days**. Start command: `python scripts/run_ingestion.py`. The 7-day default lookback (`NHTSA_LOOKBACK_DAYS`) gives comfortable overlap so a missed run backfills cleanly on the next firing.
+Runs as a Railway cron service (`signal` in the project) on schedule `0 7 */3 * *` UTC = **02:00 CT every 3 days**. Start command: `python scripts/run_ingestion.py`. The default lookback (`NHTSA_LOOKBACK_DAYS`) is 180 days: NHTSA publishes complaints weeks after they are filed, so a short window silently drops most of them. Inserts dedupe on ODI number, so re-checking six months every run is safe. The same refresh can be run on demand from the Admin page.
 
 Each run:
 1. Pulls complaints filed in the last 7 days for every tracked make/model/year.

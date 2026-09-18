@@ -480,6 +480,8 @@ _admin_status: dict[str, dict] = {
                       "summary": None, "args": None, "error": None},
     "rescore_all":   {"state": "idle", "started_at": None, "finished_at": None,
                       "summary": None, "args": None, "error": None},
+    "refresh_complaints": {"state": "idle", "started_at": None, "finished_at": None,
+                           "summary": None, "args": None, "error": None},
 }
 _admin_lock = threading.Lock()
 
@@ -576,6 +578,40 @@ def admin_rescore_all(request: Request, user: str = Depends(require_auth)) -> Re
         args=("rescore_all", {}, _run),
         daemon=True,
         name="rescore_all",
+    ).start()
+    return RedirectResponse("/admin?msg=started", status_code=303)
+
+
+@app.post("/admin/refresh-complaints")
+def admin_refresh_complaints(
+    request: Request,
+    user: str = Depends(require_auth),
+    lookback_days: int = Form(180),
+) -> Response:
+    """Pull recent NHTSA complaints on demand (same job as the cron, minus
+    memos and emails). Lookback is passed explicitly so this service's env
+    can't shorten it."""
+    if _admin_busy("refresh_complaints"):
+        return RedirectResponse("/admin?msg=already-running", status_code=303)
+
+    from signalwarn.ingestion import run_daily_ingestion
+
+    lookback_days = max(1, min(365, lookback_days))
+
+    def _run() -> dict:
+        r = run_daily_ingestion(lookback_days=lookback_days)
+        return {
+            "ingested": r.ingested,
+            "skipped_existing": r.skipped,
+            "clusters_touched": r.clusters_touched,
+            "errors": len(r.errors),
+        }
+
+    threading.Thread(
+        target=_admin_run,
+        args=("refresh_complaints", {"lookback_days": lookback_days}, _run),
+        daemon=True,
+        name="refresh_complaints",
     ).start()
     return RedirectResponse("/admin?msg=started", status_code=303)
 

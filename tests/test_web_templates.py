@@ -220,11 +220,12 @@ def test_cluster_login_admin_render():
             "args": None,
             "error": None,
         }
-        for k in ("check_filings", "rescore_all")
+        for k in ("check_filings", "rescore_all", "refresh_complaints")
     }
     req = SimpleNamespace(query_params={"msg": "started"})
     html = _render("admin.html", title="x", user="jim", status=status, request=req, ticker=None)
     assert "Task started" in html and 'for="min-score"' in html
+    assert 'for="lookback-days"' in html and "/admin/refresh-complaints" in html
 
 
 def test_palette_values_are_full_class_strings():
