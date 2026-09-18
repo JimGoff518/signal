@@ -29,11 +29,13 @@ WATCH_THRESHOLD = 50
 
 def _build_prompt(cluster: dict, sample_descriptions: list[str], states: list[str]) -> str:
     samples = "\n\n---\n\n".join(sample_descriptions[:5]) or "(no narratives on file)"
-    return f"""You are a Texas plaintiff's attorney at Goff Law PLLC evaluating
-a **consumer class action / product liability** opportunity (with mass tort
-as a secondary lens). Personal-injury severity defeats Rule 23 predominance
-under *Amchem*, so prioritize class-certification signals — numerosity,
-commonality, manufacturer knowledge, economic harm — over death/injury counts.
+    return f"""You are a senior Texas plaintiff's attorney at Goff Law PLLC with 
+20 years of experience in class actions, mass torts, and product liability. 
+You are evaluating a potential case opportunity from NHTSA complaint data.
+
+Your job is to reason like a trial lawyer, not a paralegal. Think about 
+causation, manufacturer knowledge timelines, certification hurdles, damages 
+models, and which Texas causes of action fit the facts. Be specific and direct.
 
 COMPLAINT CLUSTER DATA:
 - Vehicle: {cluster['model_year'] or 'multi-year'} {cluster['make']} {cluster['model']}
@@ -52,26 +54,62 @@ COMPLAINT CLUSTER DATA:
 SAMPLE COMPLAINT DESCRIPTIONS:
 {samples}
 
-Provide a viability assessment in this exact format:
+Provide your analysis in this exact format:
 
-NUMEROSITY (Rule 23(a)(1)): [1-2 sentences — is the class so numerous that joinder is impracticable?]
+CASE TYPE: [One of: CLASS ACTION / MASS TORT / MDL / INDIVIDUAL CASES / HYBRID]
+Explain in 1-2 sentences why this routes to that vehicle rather than another.
 
-COMMONALITY (Rule 23(a)(2)): [1-2 sentences — is the defect uniform across complaints, including across model years if multi-year? Could one common question generate a common answer?]
+CONFIDENCE SCORE: [1-10]
+1-3 = low priority, 4-6 = monitor, 7-8 = investigate, 9-10 = move now.
+Explain the score in one sentence.
 
-PREDOMINANCE (Rule 23(b)(3)): [1-2 sentences — do common questions predominate over individualized issues like causation and damages?]
+NUMEROSITY (Rule 23(a)(1)): 
+Is the class so numerous that joinder is impracticable? How many potential 
+class members exist nationally and in Texas specifically?
 
-MANUFACTURER KNOWLEDGE: [1-2 sentences — does the pattern (volume, multi-year, TSBs, denied warranties, recalls) suggest the manufacturer knew or should have known? Foundation for failure-to-warn / *scienter*.]
+COMMONALITY & PREDOMINANCE (Rule 23(a)(2) + (b)(3)): 
+Is the defect uniform enough that one common question generates a common answer? 
+Do common issues predominate over individual ones like causation and damages?
 
-ECONOMIC DAMAGE: [1-2 sentences — is there measurable uniform economic loss (warranty denial, diminished value, repair costs, buyback) independent of physical injury? This is class-action gold.]
+MANUFACTURER KNOWLEDGE TIMELINE:
+Based on complaint volume, dates, and patterns — when did the manufacturer 
+likely first know about this defect? What does that timeline suggest about 
+concealment, failure to warn, or scienter? This is critical for punitive damages.
 
-INJURY/DEATH SEVERITY (mass-tort secondary lens): [1-2 sentences — if severe individual harm dominates, this likely routes to mass tort / MDL rather than class.]
+ECONOMIC DAMAGES MODEL:
+What is the measurable uniform economic loss per class member? 
+(Warranty denial, diminished value, repair costs, buyback refusal.)
+Estimate a per-plaintiff damages range if possible.
 
-LEGAL THEORY & VEHICLE: [2-3 sentences — most likely theory (design defect, failure to warn, breach of warranty, consumer fraud) AND most likely vehicle (Rule 23(b)(3) damages class, mass tort/MDL, individual cases). Be specific.]
+TEXAS CAUSES OF ACTION:
+List the specific Texas legal theories that fit these facts:
+- Texas DTPA (Deceptive Trade Practices Act) — applicable?
+- Breach of implied warranty of merchantability
+- Design defect (risk-utility test)
+- Manufacturing defect
+- Failure to warn
+- Fraud / fraudulent concealment
+For each applicable theory, one sentence on why it fits.
 
-RECOMMENDED ACTION: [One of: INVESTIGATE NOW / MONITOR CLOSELY / LOW PRIORITY]
+INJURY SEVERITY ASSESSMENT:
+If deaths or serious injuries are present, does this route to mass tort / MDL 
+rather than class? Would *Amchem* predominance be defeated by individual 
+injury issues?
 
-Keep the entire response under 500 words. Be direct. Do not use disclaimers.
-Texas law applies."""
+RED FLAGS & RISKS:
+What are the 2-3 biggest obstacles to certification or recovery? 
+Be honest — what could defeat this case?
+
+RECOMMENDED NEXT STEPS:
+List 3 specific actions in priority order:
+1. [Most urgent action]
+2. [Second action]  
+3. [Third action]
+
+RECOMMENDED ACTION: [INVESTIGATE NOW / MONITOR CLOSELY / LOW PRIORITY]
+
+Keep the entire response under 700 words. Be direct. No disclaimers. 
+Texas law applies. Think like a trial lawyer, write like one."""
 
 
 def _generate_memo(cluster: dict, sample_descriptions: list[str], states: list[str]) -> str:
