@@ -7,7 +7,8 @@ from signalwarn.config import Settings
 def _make_settings(**overrides) -> Settings:
     base = {"database_url": "postgresql://x:x@localhost:5432/x"}
     base.update(overrides)
-    return Settings(**base)
+    # _env_file=None: keep a developer's real .env from leaking into unit tests
+    return Settings(_env_file=None, **base)
 
 
 def test_single_user_fallback_to_username_password():
