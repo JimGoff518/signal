@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS clusters (
   viability_memo        TEXT,
   memo_generated_at     TIMESTAMPTZ,
   memo_complaint_count_at_gen INTEGER,                    -- to detect "doubled since memo"
+  research_memo         TEXT,                             -- /investigate addendum (Descrybe-sourced)
+  research_generated_at TIMESTAMPTZ,
   created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

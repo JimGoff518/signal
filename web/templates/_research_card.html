@@ -1,0 +1,15 @@
+<div id="research-card" class="card-inset p-4 md:p-5 mt-4">
+  <div class="flex items-center justify-between gap-3 mb-3">
+    <div class="eyebrow">Research addendum</div>
+    <span class="text-xs text-zinc-500">Descrybe-sourced authority</span>
+  </div>
+
+  {% if cluster.research_memo %}
+    <div class="prose prose-invert prose-sm max-w-none text-zinc-300 whitespace-pre-wrap leading-relaxed">{{ cluster.research_memo | linkify }}</div>
+    <div class="text-xs text-zinc-500 mt-3 num">Researched {% if cluster.research_generated_at %}{{ cluster.research_generated_at.strftime("%b") }} {{ cluster.research_generated_at.day }}, {{ cluster.research_generated_at.strftime("%Y %I:%M %p") }}{% else %}—{% endif %}</div>
+  {% else %}
+    <p class="text-sm text-zinc-500">
+      No research yet. From the repo in Claude Code, run <code class="text-zinc-300">/investigate {{ cluster.id }}</code> to pull certification precedent and Texas authority for this cluster.
+    </p>
+  {% endif %}
+</div>

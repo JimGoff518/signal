@@ -329,3 +329,44 @@ def test_class_action_pill_reflects_status():
     )
     html = _render("cluster.html", cluster=_cluster(class_action_status="terminated"), **ctx)
     assert "Class action terminated" in html and "Class action pending" not in html
+
+
+# --- /investigate research addendum -------------------------------------------
+
+
+def test_linkify_escapes_html_and_links_urls():
+    out = str(webapp.linkify("<b>x</b> see https://descrybe.com/share/c1?v=2 now"))
+    assert "&lt;b&gt;x&lt;/b&gt;" in out
+    assert '<a href="https://descrybe.com/share/c1?v=2"' in out
+    assert 'rel="noopener"' in out
+    assert str(webapp.linkify(None)) == ""
+
+
+def test_research_card_renders_addendum_with_links():
+    c = _cluster(
+        research_memo="BOTTOM LINE\nSee https://descrybe.com/share/case-viewer/c173489 (Wolin).",
+        research_generated_at=datetime(2026, 9, 18, 10, 30),
+    )
+    html = _render("_research_card.html", cluster=c)
+    assert "Research addendum" in html
+    assert '<a href="https://descrybe.com/share/case-viewer/c173489"' in html
+    assert "Sep 18, 2026" in html
+
+
+def test_research_card_empty_state_names_the_skill():
+    c = _cluster(research_memo=None, research_generated_at=None)
+    html = _render("_research_card.html", cluster=c)
+    assert "/investigate 7" in html
+
+
+def test_memos_page_flags_researched_clusters():
+    m = _cluster(research_memo="x", new_since_memo=0)
+    m2 = _cluster(id=9, research_memo=None, new_since_memo=0)
+    html = _render(
+        "memos.html", title="Memos", user="jim", active_nav="memos", memos=[m, m2],
+        total=2, page=1, last_page=1, page_size=25, q="", last_ingestion=None,
+        ticker={
+            "complaints_scanned": 1, "clusters_tracked": 1, "memos_written": 1, "last_refresh": None
+        },
+    )
+    assert html.count(">researched<") == 1

@@ -58,6 +58,14 @@ PENDING: list[tuple[str, str]] = [
           ADD COLUMN IF NOT EXISTS tx_complaint_count INTEGER NOT NULL DEFAULT 0;
         """,
     ),
+    (
+        "2026-09-18 — /investigate research addendum (Descrybe-sourced authority)",
+        """
+        ALTER TABLE clusters
+          ADD COLUMN IF NOT EXISTS research_memo TEXT,
+          ADD COLUMN IF NOT EXISTS research_generated_at TIMESTAMPTZ;
+        """,
+    ),
 ]
 
 

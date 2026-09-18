@@ -38,6 +38,7 @@
           <span class="text-xs text-zinc-400 num font-mono">Score {{ m.score }}</span>
           {% if m.recall_issued %}<span class="pill text-amber-300 ring-amber-500/30">recall</span>{% endif %}
           {% if m.nhtsa_investigation_open %}<span class="pill text-orange-300 ring-orange-500/30">probe</span>{% endif %}
+          {% if m.research_memo %}<span class="pill text-sky-300 ring-sky-500/30" title="A Descrybe research addendum is on the cluster page.">researched</span>{% endif %}
           {% if m.class_action_status == 'terminated' %}
             <span class="pill text-zinc-400 ring-zinc-700" title="The class action for this cluster has been resolved; it no longer appears on the dashboard.">case closed</span>
           {% elif m.class_action_filed %}

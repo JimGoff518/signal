@@ -495,7 +495,7 @@ def list_memos(
     template flags them. `memo_complaint_count_at_gen` lets the page say how
     many complaints have arrived since the memo was written.
     """
-    where = ["c.viability_memo IS NOT NULL"]
+    where = ["(c.viability_memo IS NOT NULL OR c.research_memo IS NOT NULL)"]
     params: dict[str, Any] = {}
     if search:
         where.append(
@@ -513,10 +513,12 @@ def list_memos(
                    c.score, c.complaint_count, c.injury_count, c.death_count,
                    c.recall_issued, c.nhtsa_investigation_open,
                    c.class_action_filed, c.class_action_status,
-                   c.viability_memo, c.memo_generated_at, c.memo_complaint_count_at_gen
+                   c.viability_memo, c.memo_generated_at, c.memo_complaint_count_at_gen,
+                   c.research_memo, c.research_generated_at
               FROM clusters c
              WHERE {where_sql}
-             ORDER BY c.memo_generated_at DESC NULLS LAST, c.score DESC, c.id
+             ORDER BY GREATEST(c.memo_generated_at, c.research_generated_at) DESC NULLS LAST,
+                      c.score DESC, c.id
              LIMIT %(limit)s OFFSET %(offset)s
             """,
             {**params, "limit": limit, "offset": offset},

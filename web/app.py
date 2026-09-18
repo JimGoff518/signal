@@ -10,6 +10,7 @@ Run locally:
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Quer
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 from starlette.middleware.sessions import SessionMiddleware
 
 from signalwarn.config import settings
@@ -121,6 +123,36 @@ templates.env.globals["PALETTE"] = CLASSIFICATION_PALETTE
 templates.env.globals["CLASSIFICATION_ORDER"] = CLASSIFICATION_ORDER
 templates.env.globals["ACTIVITY_WINDOWS"] = queries.ACTIVITY_WINDOWS
 templates.env.globals["SOL_YEARS"] = settings.sol_years
+
+_URL_RE = re.compile(r"https?://[^\s<>\"']+")
+
+
+def linkify(text: str | None) -> Markup:
+    """Escape text, then turn bare http(s) URLs into links.
+
+    Used for the research addendum, which carries Descrybe case links. Escape
+    first so nothing in the stored text can inject markup; trailing
+    punctuation is left outside the anchor so sentences read naturally.
+    """
+    if not text:
+        return Markup("")
+    safe = str(escape(text))
+
+    def _anchor(m: re.Match[str]) -> str:
+        url = m.group(0)
+        tail = ""
+        while url and url[-1] in ".,;:)":
+            tail = url[-1] + tail
+            url = url[:-1]
+        return (
+            f'<a href="{url}" target="_blank" rel="noopener" '
+            f'class="underline underline-offset-4 hover:text-white">{url}</a>{tail}'
+        )
+
+    return Markup(_URL_RE.sub(_anchor, safe))
+
+
+templates.env.filters["linkify"] = linkify
 
 
 # ─── Auth ───────────────────────────────────────────────────────────────
