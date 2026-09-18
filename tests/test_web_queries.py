@@ -66,3 +66,10 @@ def test_build_filters_texas_minimum():
     assert "c.tx_complaint_count >= %(tx_min)s" in where and params["tx_min"] == 5
     where, params = queries._build_filters(tx_min=0)
     assert "tx_complaint_count" not in where and "tx_min" not in params
+
+
+def test_build_filters_ewr_reported():
+    where, _ = queries._build_filters(ewr="1")
+    assert "c.ewr_incident_count > 0" in where
+    where, _ = queries._build_filters(ewr="")
+    assert "ewr_incident_count" not in where

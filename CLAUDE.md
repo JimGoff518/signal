@@ -69,6 +69,7 @@ The pipeline is invoked two ways:
 ## Things that bite
 
 - **Tracked vehicles are hardcoded** in [src/signalwarn/ingestion.py](src/signalwarn/ingestion.py) (`TRACKED_VEHICLES`, model years 2015-2025). Adding/removing makes happens here, not in config.
+- **EWR (manufacturer death/injury reports) has no API.** NHTSA only exposes Early Warning Reporting data through its interactive search, so Jim exports one text file per manufacturer per quarter and uploads them on `/admin`; [src/signalwarn/ewr.py](src/signalwarn/ewr.py) parses, dedupes and rolls them up onto `clusters.ewr_*`. The site blocks scripted fetches; don't try to automate the download.
 - **Component normalization** in [src/signalwarn/normalize.py](src/signalwarn/normalize.py) maps NHTSA's free-text component strings to ~15 canonical buckets. The cluster key uses the *normalized* component, so changes to the mapping change cluster identity.
 - **Migrations are unversioned.** Only [migrations/001_initial_schema.sql](migrations/001_initial_schema.sql) exists; there's no migration runner. The Dockerfile and `docker-compose.yml` apply it on first boot. New schema changes need to land in this file *and* in any prod DB by hand — coordinate with Jim before changing schema.
 - **Vendored crawl4ai** lives in [vendor/crawl4ai/](vendor/crawl4ai/) (~30M, intentionally committed to repo, intentionally **excluded** from Railway uploads via `.railwayignore`). It's reserved for Phase 2 (Reddit / CarComplaints scraping); no current code imports it.

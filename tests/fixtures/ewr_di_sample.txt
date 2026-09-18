@@ -1,0 +1,19 @@
+EWR Data - Death & Injury Records Records
+      NHTSA URL: https://www.nhtsa.gov/vehicle-manufacturers/early-warning-reporting
+Report Created on: Sep-18-2026 09:31 AM EST
+----------------------------------------------------------
+
+ Manufacturer Name : Ford Motor Company
+  Reporting Period : 2025, Q4
+Reporting Category : LIGHT VEHICLES
+     Total Records : 8
+
+SEQUENCE_ID|MAKE|MODEL|MODEL_YEAR|VIN|FUEL_PROPULSION_SYSTEM|INCIDENT_DATE|DEATHS|INJURIES|STATE_OR_FOREIGN_COUNTRY|COMPONENT_A|COMPONENT_B|COMPONENT_C|COMPONENT_D|COMPONENT_E|
+6|FORD|BRONCO|2025|1FMEE0RR8SL...|SIF|10/28/2025|0|1||Power Train|Engine and Cooling System|Steering System|Other||
+10|FORD|BRONCO SPORT|2023|3FMCR9B62PR...|SIF|12/21/2024|0|1|TX|Power Train|||||
+9|FORD|BRONCO SPORT|2022|3FMCR9C61NR...|SIF|08/30/2025|0|1|CA|Fire|Fuel System||||
+14|FORD|BRONCO SPORT|2025|3FMCR9CN0SR...|SIF||0|1|CA|Structure|||||
+32|FORD|EXPLORER|2020|UNK...|UNK|06/17/2024|1|1|TX|Seats|Structure||||
+46|FORD|F-150|2024|1FT6W5L79RW...|EBP|11/01/2025|1|0|MD|No System/Component Specified|||||
+49|FORD|F-150|2025|1FTFW5LD9SF...|HEV|09/04/2025|0|1|TX|Service Brake System, Air|||||
+69|LINCOLN|CORSAIR|2025|5LMTJ5DZ8SU...|PHV|10/02/2025|0|1|CA|Air Bags|||||

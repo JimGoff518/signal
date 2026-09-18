@@ -131,3 +131,35 @@ ALTER TABLE clusters ADD COLUMN IF NOT EXISTS time_barred_count INTEGER NOT NULL
 ALTER TABLE clusters ADD COLUMN IF NOT EXISTS tx_complaint_count INTEGER NOT NULL DEFAULT 0;
 
 COMMIT;
+
+-- Phase 2 EWR (added 2026-09-18). NHTSA Early Warning Reporting death & injury
+-- records, uploaded from /admin as per-manufacturer quarterly exports and
+-- rolled up onto clusters by signalwarn.ewr.apply_ewr_to_clusters.
+CREATE TABLE IF NOT EXISTS ewr_death_injury (
+  id            BIGSERIAL PRIMARY KEY,
+  manufacturer  TEXT        NOT NULL,
+  period        TEXT        NOT NULL,           -- '2025Q4'
+  category      TEXT        NOT NULL,           -- 'LIGHT VEHICLES', ...
+  sequence_id   INTEGER     NOT NULL,
+  make          TEXT        NOT NULL,
+  model         TEXT        NOT NULL,
+  model_year    INTEGER,
+  vin_prefix    TEXT,
+  fuel          TEXT,
+  incident_date DATE,
+  deaths        INTEGER     NOT NULL DEFAULT 0,
+  injuries      INTEGER     NOT NULL DEFAULT 0,
+  state         TEXT,
+  components    TEXT[]      NOT NULL DEFAULT '{}',
+  component     TEXT        NOT NULL,           -- normalized bucket
+  fire          BOOLEAN     NOT NULL DEFAULT FALSE,
+  source_file   TEXT,
+  imported_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (manufacturer, period, category, sequence_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ewr_vehicle
+  ON ewr_death_injury (make, model, model_year, component);
+ALTER TABLE clusters
+  ADD COLUMN IF NOT EXISTS ewr_incident_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS ewr_death_count    INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS ewr_injury_count   INTEGER NOT NULL DEFAULT 0;

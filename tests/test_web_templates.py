@@ -52,6 +52,9 @@ def _cluster(**over):
         memo_generated_at=datetime(2026, 5, 9, 14, 3),
         has_memo=True,
         tx_complaint_count=12,
+        ewr_incident_count=2,
+        ewr_death_count=1,
+        ewr_injury_count=3,
         days_since_last=0,
         sparkline=[1, 4, 2, 0, 3],
         sparkline_max=4,
@@ -94,6 +97,7 @@ def _dashboard_ctx(**over):
         selected_recall="",
         selected_filed="",
         selected_tx="",
+        selected_ewr="",
         selected_sort="score",
         selected_direction="desc",
         sort_default_dir=queries.SORT_DEFAULT_DIR,
@@ -145,6 +149,7 @@ def test_dashboard_renders_with_charts_and_filters(chart_ctx):
         "f-recall",
         "f-filed",
         "f-tx",
+        "f-ewr",
         "f-q",
     ):
         assert f'for="{fid}"' in html and f'id="{fid}"' in html
@@ -224,12 +229,13 @@ def test_cluster_login_admin_render():
             "args": None,
             "error": None,
         }
-        for k in ("check_filings", "rescore_all", "refresh_complaints")
+        for k in ("check_filings", "rescore_all", "refresh_complaints", "ewr_import")
     }
     req = SimpleNamespace(query_params={"msg": "started"})
     html = _render("admin.html", title="x", user="jim", status=status, request=req, ticker=None)
     assert "Task started" in html and 'for="min-score"' in html
     assert 'for="lookback-days"' in html and "/admin/refresh-complaints" in html
+    assert 'enctype="multipart/form-data"' in html and 'name="files"' in html
 
 
 def test_palette_values_are_full_class_strings():

@@ -17,7 +17,7 @@ from pathlib import Path
 import threading
 from datetime import datetime, timezone
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -229,6 +229,7 @@ def dashboard(
     recall: str | None = Query(None),
     filed: str | None = Query(None),
     tx: str | None = Query(None),
+    ewr: str | None = Query(None),
     q: str | None = Query(None),
     sort: str = Query("score"),
     direction: str = Query("desc"),
@@ -263,6 +264,7 @@ def dashboard(
         recall=recall,
         filed=filed,
         tx_min=tx_min,
+        ewr=ewr,
         search=q,
     )
     clusters, total = queries.list_clusters(
@@ -296,7 +298,7 @@ def dashboard(
     filter_params = {
         "window": window, "make": make or "", "year": year_int or "",
         "component": component or "", "classification": classification or "",
-        "recall": recall or "", "filed": filed or "", "tx": tx_min or "", "q": q or "",
+        "recall": recall or "", "filed": filed or "", "tx": tx_min or "", "ewr": ewr or "", "q": q or "",
     }
     filters_qs = urlencode({k: v for k, v in filter_params.items() if v})
     # Filters + sort/direction — used by pagination links so the page stays sorted.
@@ -328,6 +330,7 @@ def dashboard(
             "selected_recall": recall or "",
             "selected_filed": filed or "",
             "selected_tx": str(tx_min) if tx_min else "",
+            "selected_ewr": ewr or "",
             "selected_sort": sort,
             "selected_direction": direction,
             "sort_default_dir": queries.SORT_DEFAULT_DIR,
@@ -531,6 +534,8 @@ _admin_status: dict[str, dict] = {
                       "summary": None, "args": None, "error": None},
     "refresh_complaints": {"state": "idle", "started_at": None, "finished_at": None,
                            "summary": None, "args": None, "error": None},
+    "ewr_import": {"state": "idle", "started_at": None, "finished_at": None,
+                   "summary": None, "args": None, "error": None},
 }
 _admin_lock = threading.Lock()
 
@@ -661,6 +666,38 @@ def admin_refresh_complaints(
         args=("refresh_complaints", {"lookback_days": lookback_days}, _run),
         daemon=True,
         name="refresh_complaints",
+    ).start()
+    return RedirectResponse("/admin?msg=started", status_code=303)
+
+
+@app.post("/admin/upload-ewr")
+async def admin_upload_ewr(
+    request: Request,
+    user: str = Depends(require_auth),
+    files: list[UploadFile] = File(...),
+) -> Response:
+    """Ingest NHTSA EWR Death & Injury exports (one file per manufacturer per
+    quarter, downloaded by hand from NHTSA's EWR Data Search) and roll the
+    counts up onto clusters. Files are read here; DB work runs in the
+    background thread like the other admin tasks."""
+    if _admin_busy("ewr_import"):
+        return RedirectResponse("/admin?msg=already-running", status_code=303)
+
+    from signalwarn.ewr import import_ewr_files
+
+    payload: list[tuple[str, str]] = []
+    for f in files:
+        raw = await f.read()
+        if raw:
+            payload.append((f.filename or "upload.txt", raw.decode("utf-8", errors="replace")))
+    if not payload:
+        return RedirectResponse("/admin?msg=no-files", status_code=303)
+
+    threading.Thread(
+        target=_admin_run,
+        args=("ewr_import", {"files": [n for n, _ in payload]}, import_ewr_files, payload),
+        daemon=True,
+        name="ewr_import",
     ).start()
     return RedirectResponse("/admin?msg=started", status_code=303)
 

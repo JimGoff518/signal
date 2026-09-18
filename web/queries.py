@@ -83,6 +83,7 @@ def _build_filters(
     recall: str | None = None,
     filed: str | None = None,
     tx_min: int | None = None,
+    ewr: str | None = None,
     search: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Translate dashboard filter inputs into a WHERE clause + params.
@@ -135,6 +136,10 @@ def _build_filters(
         where.append("c.tx_complaint_count >= %(tx_min)s")
         params["tx_min"] = int(tx_min)
 
+    # Phase 2 EWR: manufacturer has reported at least one death/injury claim.
+    if ewr == "1":
+        where.append("c.ewr_incident_count > 0")
+
     if search:
         where.append(
             "(LOWER(c.make) LIKE %(q)s "
@@ -156,6 +161,7 @@ def list_clusters(
     recall: str | None = None,
     filed: str | None = None,
     tx_min: int | None = None,
+    ewr: str | None = None,
     search: str | None = None,
     sort: str = "score",
     direction: str = "desc",
@@ -175,6 +181,7 @@ def list_clusters(
         recall=recall,
         filed=filed,
         tx_min=tx_min,
+        ewr=ewr,
         search=search,
     )
     order_by = _build_order_by(sort, direction)
@@ -191,6 +198,7 @@ def list_clusters(
                    c.first_complaint_date, c.last_complaint_date,
                    c.recall_issued, c.nhtsa_investigation_open,
                    c.class_action_filed, c.class_action_status, c.tx_complaint_count,
+                   c.ewr_incident_count, c.ewr_death_count, c.ewr_injury_count,
                    (c.viability_memo IS NOT NULL) AS has_memo
               FROM clusters c
              WHERE {where_sql}

@@ -43,6 +43,8 @@
     ('Fires', cluster.fire_count, 'text-zinc-300'),
     ('New · 30 days', cluster.velocity_30d, 'text-zinc-300'),
     ('Texas owners', cluster.tx_complaint_count, 'text-zinc-100' if cluster.tx_complaint_count else 'text-zinc-500'),
+    ('Mfr-reported deaths', cluster.ewr_death_count, 'text-violet-300' if cluster.ewr_death_count else 'text-zinc-500'),
+    ('Mfr-reported injuries', cluster.ewr_injury_count, 'text-violet-300' if cluster.ewr_injury_count else 'text-zinc-500'),
   ] %}
   {% for label, val, color in stats %}
   <div class="card p-3 md:p-4">

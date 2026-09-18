@@ -30,7 +30,7 @@
 {%- endmacro %}
 
 {% block content %}
-{% set filters_active = selected_make or selected_year or selected_component or selected_classification != 'ALL' or selected_recall or selected_filed or selected_tx or q %}
+{% set filters_active = selected_make or selected_year or selected_component or selected_classification != 'ALL' or selected_recall or selected_filed or selected_tx or selected_ewr or q %}
 
 <!-- Page header -->
 <div class="flex items-end justify-between mb-5 flex-wrap gap-3">
@@ -107,6 +107,13 @@
         <option value="5" {% if selected_tx == '5' %}selected{% endif %}>5 or more</option>
         <option value="10" {% if selected_tx == '10' %}selected{% endif %}>10 or more</option>
         <option value="25" {% if selected_tx == '25' %}selected{% endif %}>25 or more</option>
+      </select>
+    </div>
+    <div>
+      <label for="f-ewr" class="field-label">Manufacturer reports</label>
+      <select id="f-ewr" name="ewr" class="field" onchange="this.form.submit()">
+        <option value="" {% if not selected_ewr %}selected{% endif %}>Any</option>
+        <option value="1" {% if selected_ewr == '1' %}selected{% endif %}>Has death/injury reports</option>
       </select>
     </div>
     <div>
@@ -300,6 +307,7 @@
               {% if c.recall_issued %}<span class="pill text-amber-300 ring-amber-500/30">recall</span>{% endif %}
               {% if c.nhtsa_investigation_open %}<span class="pill text-orange-300 ring-orange-500/30">probe</span>{% endif %}
               {% if c.class_action_filed %}<span class="pill text-rose-300 ring-rose-500/30" title="A class action is on file ({{ c.class_action_status or 'status unknown' }}). Hidden from the default view.">filed</span>{% endif %}
+              {% if c.ewr_incident_count %}<span class="pill text-violet-300 ring-violet-500/30" title="{{ c.ewr_death_count }} death{{ '' if c.ewr_death_count == 1 else 's' }}, {{ c.ewr_injury_count }} injur{{ 'y' if c.ewr_injury_count == 1 else 'ies' }} reported by the manufacturer to NHTSA (Early Warning Reporting)">mfr-reported</span>{% endif %}
               {% if c.has_memo %}<span class="pill text-zinc-300 ring-zinc-700" title="AI viability memo drafted">memo</span>{% endif %}
             </div>
           </td>
@@ -618,7 +626,7 @@
   if (focusId) setTimeout(() => openPanel(parseInt(focusId)), 50);
 
   // Remember the last filter set; restore it when landing on / with no params.
-  const filterKeys = ['window', 'make', 'year', 'component', 'classification', 'recall', 'filed', 'tx', 'q'];
+  const filterKeys = ['window', 'make', 'year', 'component', 'classification', 'recall', 'filed', 'tx', 'ewr', 'q'];
   const hasFilters = filterKeys.some(k => params.has(k));
   if (hasFilters) {
     const saved = {};
