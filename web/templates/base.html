@@ -50,6 +50,12 @@
         <span translate="no">SIGNAL</span>
         <span class="font-sans text-zinc-500 font-normal tracking-normal hidden sm:inline">Class action · Product liability</span>
       </a>
+      <nav aria-label="Primary" class="flex items-center gap-1 ml-2 md:ml-6">
+        {% for key, href, label in [('clusters', '/', 'Clusters'), ('memos', '/memos', 'Memos')] %}
+          <a href="{{ href }}" {% if active_nav == key %}aria-current="page"{% endif %}
+             class="nav-tab {% if active_nav == key %}nav-tab-active{% endif %}">{{ label }}</a>
+        {% endfor %}
+      </nav>
       <div class="flex-1"></div>
       <span class="text-sm text-zinc-500 hidden md:inline">Goff Law PLLC</span>
       <nav aria-label="Account" class="flex items-center gap-4">

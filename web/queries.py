@@ -472,6 +472,44 @@ def all_years() -> list[int]:
         return [r["model_year"] for r in cur.fetchall()]
 
 
+def list_memos(
+    *, search: str | None = None, limit: int = 25, offset: int = 0
+) -> tuple[list[dict[str, Any]], int]:
+    """Every cluster with a viability memo, newest memo first.
+
+    Shows terminated class actions too (the memo is still history) — the
+    template flags them. `memo_complaint_count_at_gen` lets the page say how
+    many complaints have arrived since the memo was written.
+    """
+    where = ["c.viability_memo IS NOT NULL"]
+    params: dict[str, Any] = {}
+    if search:
+        where.append(
+            "(LOWER(c.make) LIKE %(q)s OR LOWER(c.model) LIKE %(q)s "
+            "OR LOWER(c.component) LIKE %(q)s OR LOWER(c.viability_memo) LIKE %(q)s)"
+        )
+        params["q"] = f"%{search.lower()}%"
+    where_sql = " AND ".join(where)
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) AS n FROM clusters c WHERE {where_sql}", params)
+        total = int(cur.fetchone()["n"])
+        cur.execute(
+            f"""
+            SELECT c.id, c.make, c.model, c.model_year, c.component, c.classification,
+                   c.score, c.complaint_count, c.injury_count, c.death_count,
+                   c.recall_issued, c.nhtsa_investigation_open,
+                   c.class_action_filed, c.class_action_status,
+                   c.viability_memo, c.memo_generated_at, c.memo_complaint_count_at_gen
+              FROM clusters c
+             WHERE {where_sql}
+             ORDER BY c.memo_generated_at DESC NULLS LAST, c.score DESC, c.id
+             LIMIT %(limit)s OFFSET %(offset)s
+            """,
+            {**params, "limit": limit, "offset": offset},
+        )
+        return list(cur.fetchall()), total
+
+
 def header_stats() -> dict[str, Any]:
     """Headline numbers for the status-strip ticker.
 

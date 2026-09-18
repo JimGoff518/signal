@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-end justify-between mb-5 flex-wrap gap-3">
+  <div>
+    <h1 class="font-display text-2xl md:text-3xl font-semibold tracking-tight">Viability memos</h1>
+    <p class="text-sm text-zinc-500 mt-1">Every memo Claude has drafted, newest first. Memos are written automatically for clusters that reach Watch or higher.</p>
+  </div>
+</div>
+
+<form method="get" action="/memos" class="card p-3 md:p-4 mb-4 flex items-end gap-2 flex-wrap" role="search" aria-label="Search memos">
+  <div class="flex-1 min-w-[16rem]">
+    <label for="m-q" class="field-label">Search</label>
+    <input id="m-q" type="search" name="q" value="{{ q }}" placeholder="Make, model, component, or a phrase from a memo…"
+           autocomplete="off" spellcheck="false" class="field" />
+  </div>
+  <button type="submit" class="btn-primary">Search</button>
+  {% if q %}<a href="/memos" class="btn-ghost">Clear</a>{% endif %}
+</form>
+
+<div class="text-xs text-zinc-500 mb-3" role="status" aria-live="polite">
+  <span class="num text-zinc-300 font-medium">{{ "{:,}".format(total) }}</span> memo{{ '' if total == 1 else 's' }}{% if total %} · showing {{ ((page - 1) * page_size) + 1 }}–{{ ((page - 1) * page_size) + memos|length }}{% endif %}{% if q %} matching “{{ q }}”{% endif %}
+</div>
+
+<div class="space-y-3">
+  {% for m in memos %}
+  {% set p = PALETTE.get(m.classification, PALETTE['NOISE']) %}
+  {% set lit = ((m.score / 10) | round | int) %}
+  {% set vehicle = ((m.model_year ~ ' ') if m.model_year else 'All years · ') ~ m.make|title ~ ' ' ~ m.model|title %}
+  <article class="card p-4 md:p-5" aria-labelledby="memo-{{ m.id }}">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+          <span class="inline-flex items-center gap-1.5 font-display text-[11px] font-semibold tracking-wider uppercase {{ p.text }}">
+            <span class="w-1.5 h-1.5 rounded-full {{ p.dot }}" aria-hidden="true"></span>{{ m.classification }}
+          </span>
+          <span class="meter {{ p.text }}" aria-hidden="true">{% for i in range(10) %}<i class="{% if i < lit %}on{% endif %}"></i>{% endfor %}</span>
+          <span class="text-xs text-zinc-400 num font-mono">Score {{ m.score }}</span>
+          {% if m.recall_issued %}<span class="pill text-amber-300 ring-amber-500/30">recall</span>{% endif %}
+          {% if m.nhtsa_investigation_open %}<span class="pill text-orange-300 ring-orange-500/30">probe</span>{% endif %}
+          {% if m.class_action_status == 'terminated' %}
+            <span class="pill text-zinc-400 ring-zinc-700" title="The class action for this cluster has been resolved; it no longer appears on the dashboard.">case closed</span>
+          {% elif m.class_action_filed %}
+            <span class="pill text-rose-300 ring-rose-500/30">filed</span>
+          {% endif %}
+        </div>
+        <h2 id="memo-{{ m.id }}" class="font-display text-lg font-semibold tracking-tight">
+          <a href="/cluster/{{ m.id }}" class="hover:text-white rounded">{{ vehicle }}</a>
+          <span class="text-zinc-500 font-sans font-normal text-base"> · {{ m.component }}</span>
+        </h2>
+        <div class="text-xs text-zinc-500 mt-1 flex items-center gap-2 flex-wrap num">
+          <span>{{ "{:,}".format(m.complaint_count) }} complaints</span>
+          {% if m.injury_count %}<span class="text-rose-300">{{ m.injury_count }} inj</span>{% endif %}
+          {% if m.death_count %}<span class="text-rose-400 font-semibold">{{ m.death_count }} dth</span>{% endif %}
+          {% if m.new_since_memo > 0 %}
+            <span class="text-amber-300" title="Complaints filed since this memo was written. Consider regenerating it.">+{{ "{:,}".format(m.new_since_memo) }} since memo</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="text-xs text-zinc-500 num text-right flex-shrink-0">
+        {% if m.memo_generated_at %}
+          <div>{{ m.memo_generated_at.strftime("%b") }} {{ m.memo_generated_at.day }}, {{ m.memo_generated_at.year }}</div>
+          <div class="text-zinc-600">{{ m.memo_generated_at.strftime("%I:%M %p") }}</div>
+        {% else %}—{% endif %}
+      </div>
+    </div>
+
+    {% set memo = m.viability_memo or '' %}
+    {% if memo|length > 600 %}
+      <details class="group mt-3">
+        <summary class="cursor-pointer rounded">
+          <div class="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed group-open:hidden">{{ memo[:600] }}…</div>
+          <span class="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 mt-2">
+            <span class="transition-transform duration-150 group-open:rotate-90" aria-hidden="true">▸</span>
+            <span class="group-open:hidden">Read the full memo</span><span class="hidden group-open:inline">Collapse</span>
+          </span>
+        </summary>
+        <div class="prose prose-invert prose-sm max-w-none text-zinc-300 whitespace-pre-wrap leading-relaxed mt-2">{{ memo }}</div>
+      </details>
+    {% else %}
+      <div class="prose prose-invert prose-sm max-w-none text-zinc-300 whitespace-pre-wrap leading-relaxed mt-3">{{ memo }}</div>
+    {% endif %}
+
+    <div class="mt-3 flex items-center gap-3 text-xs">
+      <a href="/cluster/{{ m.id }}" class="btn-ghost h-8 px-2.5">Open cluster</a>
+      <a href="/?focus={{ m.id }}" class="text-zinc-500 hover:text-zinc-200 transition-colors duration-150 rounded">Show on dashboard</a>
+    </div>
+  </article>
+  {% else %}
+  <div class="card p-12 text-center text-zinc-500">
+    {% if q %}
+      No memos mention “{{ q }}”. <a href="/memos" class="text-zinc-200 underline underline-offset-4 rounded">Show all memos</a>
+    {% else %}
+      No memos yet. They're drafted automatically when a cluster reaches Watch, or on demand from a cluster's page.
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% if last_page > 1 %}
+<nav class="mt-4 flex justify-between items-center text-sm" aria-label="Pagination">
+  {% if page > 1 %}
+    <a href="?page={{ page - 1 }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-150 rounded">← Previous</a>
+  {% else %}<span class="text-zinc-600">← Previous</span>{% endif %}
+  <span class="text-zinc-500 num">Page {{ page }} of {{ last_page }}</span>
+  {% if page < last_page %}
+    <a href="?page={{ page + 1 }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-150 rounded">Next →</a>
+  {% else %}<span class="text-zinc-600">Next →</span>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

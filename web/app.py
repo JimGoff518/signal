@@ -265,6 +265,7 @@ def dashboard(
         {
             "title": "SIGNAL",
             "user": user,
+            "active_nav": "clusters",
             "clusters": clusters,
             "total": total,
             "counts": counts,
@@ -351,6 +352,43 @@ def _chart_context(stat_sparks: dict[str, list[int]], active_filters: dict) -> d
         ),
         "signals": queries.signal_counts_in_view(**active_filters),
     }
+
+
+# ─── Memos ──────────────────────────────────────────────────────────────
+
+MEMO_PAGE_SIZE = 25
+
+
+@app.get("/memos", response_class=HTMLResponse)
+def memos_page(
+    request: Request,
+    user: str = Depends(require_auth),
+    q: str | None = Query(None, max_length=120),
+    page: int = Query(1, ge=1),
+) -> Response:
+    """Every AI viability memo in one place, newest first."""
+    offset = (page - 1) * MEMO_PAGE_SIZE
+    memos, total = queries.list_memos(search=q, limit=MEMO_PAGE_SIZE, offset=offset)
+    last_page = max(1, (total + MEMO_PAGE_SIZE - 1) // MEMO_PAGE_SIZE)
+    for m in memos:
+        at_gen = m.get("memo_complaint_count_at_gen")
+        m["new_since_memo"] = (m["complaint_count"] - at_gen) if at_gen else 0
+    return templates.TemplateResponse(
+        request,
+        "memos.html",
+        {
+            "title": "SIGNAL — Memos",
+            "user": user,
+            "active_nav": "memos",
+            "memos": memos,
+            "total": total,
+            "q": q or "",
+            "page": page,
+            "last_page": last_page,
+            "page_size": MEMO_PAGE_SIZE,
+            **_ticker_ctx(),
+        },
+    )
 
 
 # ─── Cluster detail ─────────────────────────────────────────────────────

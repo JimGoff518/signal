@@ -234,3 +234,56 @@ def test_palette_values_are_full_class_strings():
             assert spec[key], (tier, key)
             for cls in spec[key].split():
                 assert "-" in cls and not cls.endswith("-"), (tier, key, cls)
+
+
+def test_memos_page_renders_and_header_tab_is_active():
+    long_memo = "Numerosity: strong. " * 60  # > 600 chars -> collapsible
+    rows = [
+        {
+            **_cluster(),
+            "new_since_memo": 40,
+            "memo_complaint_count_at_gen": 372,
+            "viability_memo": long_memo,
+        },
+        {
+            **_cluster(
+                id=9,
+                class_action_status="terminated",
+                class_action_filed=True,
+                viability_memo="Short memo.",
+                memo_generated_at=None,
+            ),
+            "new_since_memo": 0,
+        },
+    ]
+    html = _render(
+        "memos.html",
+        title="x",
+        user="jim",
+        active_nav="memos",
+        memos=rows,
+        total=2,
+        q="",
+        page=1,
+        last_page=1,
+        page_size=25,
+        ticker=None,
+    )
+    assert 'aria-current="page"' in html and ">Memos</a>" in html
+    assert "Read the full memo" in html and "+40 since memo" in html
+    assert ">case closed<" in html
+    assert html.count('href="/cluster/7"') >= 2
+    empty = _render(
+        "memos.html",
+        title="x",
+        user="jim",
+        active_nav="memos",
+        memos=[],
+        total=0,
+        q="brakes",
+        page=1,
+        last_page=1,
+        page_size=25,
+        ticker=None,
+    )
+    assert "No memos mention" in empty
