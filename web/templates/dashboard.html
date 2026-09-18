@@ -174,14 +174,14 @@
           <text x="{{ volume.w - 2 }}" y="{{ t.y - 2 }}" text-anchor="end" font-size="8" fill="#5A6580" class="font-mono">{{ "{:,}".format(t.value) }}</text>
         {% endfor %}
         {# all tracked: gray line + 10% wash #}
-        <path d="{{ volume.total_area }}" fill="#7C8AA3" fill-opacity="0.10" />
-        <path d="{{ volume.total_path }}" fill="none" stroke="#7C8AA3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        <path d="{{ volume.total_area }}" fill="#7C8AA3" fill-opacity="0.10" class="vol-wash" />
+        <path d="{{ volume.total_path }}" fill="none" stroke="#7C8AA3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" pathLength="1" class="vol-line" />
         {# score 70+: emphasized line in the data hue #}
-        <path d="{{ volume.hot_path }}" fill="none" stroke="#3987E5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        <path d="{{ volume.hot_path }}" fill="none" stroke="#3987E5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" pathLength="1" class="vol-line vol-line-hot" />
         {% if volume.points %}
           {% set last = volume.points[-1] %}
-          <circle cx="{{ last.x }}" cy="{{ last.y_hot }}" r="4" fill="#3987E5" stroke="#111827" stroke-width="2" />
-          <circle cx="{{ last.x }}" cy="{{ last.y_total }}" r="4" fill="#7C8AA3" stroke="#111827" stroke-width="2" />
+          <circle cx="{{ last.x }}" cy="{{ last.y_hot }}" r="4" fill="#3987E5" stroke="#111827" stroke-width="2" class="vol-dot" />
+          <circle cx="{{ last.x }}" cy="{{ last.y_total }}" r="4" fill="#7C8AA3" stroke="#111827" stroke-width="2" class="vol-dot" />
         {% endif %}
         {# crosshair, positioned by JS #}
         <line id="vol-cross" x1="0" x2="0" y1="{{ volume.ticks[-1].y if volume.ticks else 0 }}" y2="{{ volume.baseline }}" stroke="#98A2BA" stroke-width="1" opacity="0" />
@@ -228,7 +228,7 @@
       {% for b in rows %}
       <li class="grid grid-cols-[minmax(0,6.5rem)_1fr_auto] items-center gap-2 text-xs">
         <span class="truncate text-zinc-300" title="{{ b.label|title }}">{{ b.label|title }}</span>
-        <span class="h-2.5" aria-hidden="true"><span class="block h-full bg-data rounded-r-[4px] transition-[width] duration-300 ease-state" style="width: {{ b.width }}%"></span></span>
+        <span class="h-2.5" aria-hidden="true"><span class="bar-fill block h-full bg-data rounded-r-[4px]" style="width: {{ b.width }}%; --i: {{ loop.index0 }}"></span></span>
         <span class="num text-zinc-100 w-9 text-right">{{ "{:,}".format(b.n) }}</span>
       </li>
       {% endfor %}
@@ -275,7 +275,7 @@
         {% for c in clusters %}
         {% set p = PALETTE.get(c.classification, PALETTE['NOISE']) %}
         {% set lit = ((c.score / 10) | round | int) %}
-        <tr data-cluster-id="{{ c.id }}" class="cluster-row transition-colors duration-150 cursor-pointer" onclick="openPanel({{ c.id }})">
+        <tr data-cluster-id="{{ c.id }}" class="cluster-row transition-colors duration-150 cursor-pointer" style="--row: {{ loop.index0 }}" onclick="openPanel({{ c.id }})">
           <td class="px-4 py-3 align-middle">
             <span class="inline-flex items-center gap-1.5 font-display text-[11px] font-semibold tracking-wide uppercase {{ p.text }}">
               <span class="w-1.5 h-1.5 rounded-full {{ p.dot }}" aria-hidden="true"></span>

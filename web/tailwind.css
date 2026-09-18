@@ -55,6 +55,7 @@
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
+      animation-delay: 0ms !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
@@ -164,6 +165,27 @@
     0%, 100% { opacity: 0.45; transform: scale(0.9); box-shadow: 0 0 0 0 rgb(251 113 133 / 0.5); }
     50% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 4px rgb(251 113 133 / 0); }
   }
+
+  /* ── Load sequence: line draws, bars grow, meters light up (< 1s) ──── */
+  .vol-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 600ms cubic-bezier(0, 0, 0.2, 1) forwards; }
+  .vol-line-hot { animation-delay: 150ms; }
+  .vol-wash, .vol-dot { opacity: 0; animation: fadeIn 300ms ease-out forwards; }
+  .vol-wash { animation-delay: 450ms; }
+  .vol-dot { animation-delay: 700ms; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  .bar-fill { transform: scaleX(0); transform-origin: left center; animation: grow 500ms cubic-bezier(0, 0, 0.2, 1) forwards; animation-delay: calc(var(--i, 0) * 40ms + 120ms); }
+  @keyframes grow { to { transform: scaleX(1); } }
+
+  .meter > i.on { transform: scaleY(0.2); opacity: 0.3; animation: light 220ms cubic-bezier(0, 0, 0.2, 1) forwards;
+    animation-delay: calc(min(var(--row, 0), 12) * 45ms + var(--seg, 0) * 22ms); }
+  .meter > i:nth-child(1)  { --seg: 0; }  .meter > i:nth-child(2)  { --seg: 1; }
+  .meter > i:nth-child(3)  { --seg: 2; }  .meter > i:nth-child(4)  { --seg: 3; }
+  .meter > i:nth-child(5)  { --seg: 4; }  .meter > i:nth-child(6)  { --seg: 5; }
+  .meter > i:nth-child(7)  { --seg: 6; }  .meter > i:nth-child(8)  { --seg: 7; }
+  .meter > i:nth-child(9)  { --seg: 8; }  .meter > i:nth-child(10) { --seg: 9; }
+  @keyframes light { to { transform: none; opacity: 1; } }
 
   /* ── Chart chrome ──────────────────────────────────────────────────── */
   .chart-tip { @apply pointer-events-none absolute z-20 rounded-lg border border-zinc-800 bg-zinc-950/95 px-2.5 py-2 text-xs shadow-raised; min-width: 8rem; }
