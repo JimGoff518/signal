@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SIGNAL</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22 fill=%22%23fb7185%22/></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@700&family=IBM+Plex+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Post-login intro. Standalone page (no base.html) so the dashboard chrome
+   never flashes behind it. Logo stream scrolls up, SIGNAL hammers down, the
+   plates shatter, then the page hands off to the dashboard. Fonts match the
+   dashboard: Chakra Petch for the wordmark, IBM Plex Sans for everything else. */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#020304;font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+body{background:radial-gradient(circle at 50% 45%,#172029 0,#070a0d 35%,#020304 75%);color:white}
+#intro{position:fixed;inset:0;overflow:hidden;isolation:isolate;background:radial-gradient(circle at 50% 48%,rgba(75,102,120,.17),transparent 32%),#020304}
+#intro:after{content:"";position:absolute;z-index:30;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0 1px,transparent 1px 4px)}
+.top{position:absolute;z-index:8;top:4vh;left:50%;transform:translateX(-50%);font-size:9px;font-weight:500;letter-spacing:.52em;color:#7b8992;white-space:nowrap;animation:top 4.2s ease forwards}
+.stream{position:absolute;z-index:2;inset:-55vh 7vw -90vh;display:grid;grid-template-columns:repeat(2,1fr);gap:4vh 8vw;animation:scroll 3.75s cubic-bezier(.25,.01,.72,1) forwards}
+.brand{height:38vh;min-height:270px;display:grid;place-items:center;opacity:.2;animation:brandIn .75s ease calc(var(--i)*.018s) forwards;--dx:0px;--dy:0px;--rot:0deg}
+.plate{width:96%;height:88%;display:grid;place-items:center;border-radius:34px;background:radial-gradient(circle at 50% 40%,#fff 0,#f7f9fa 58%,#dbe3e8 100%);box-shadow:0 12px 50px rgba(0,0,0,.48),0 0 42px rgba(190,225,245,.10),inset 0 0 0 1px rgba(255,255,255,.9);overflow:hidden}
+.brand img{width:88%;height:82%;max-width:560px;max-height:300px;object-fit:contain}
+.vignette{position:absolute;z-index:4;inset:0;pointer-events:none;background:linear-gradient(#020304 0,transparent 14%,transparent 80%,#020304 100%),linear-gradient(90deg,#020304 0,transparent 7%,transparent 93%,#020304 100%)}
+.speed{position:absolute;z-index:5;inset:0;opacity:0;animation:speed 3.4s ease forwards}
+.speed i{position:absolute;top:-40vh;width:2px;height:70vh;background:linear-gradient(transparent,rgba(225,245,255,.65),transparent);filter:blur(.7px)}
+.speed i:nth-child(1){left:8%}.speed i:nth-child(2){left:21%}.speed i:nth-child(3){left:39%}.speed i:nth-child(4){left:62%}.speed i:nth-child(5){left:79%}.speed i:nth-child(6){left:93%}
+.signalWrap{position:absolute;z-index:18;left:50%;top:48%;transform:translate(-50%,-50%);width:100%;text-align:center;pointer-events:none}
+.signal{display:inline-block;font-family:"Chakra Petch","IBM Plex Sans",sans-serif;font-size:clamp(86px,15.5vw,250px);font-weight:700;line-height:.8;letter-spacing:-.04em;opacity:0;transform:translateY(-135vh) scale(.66,1.5);filter:blur(18px);text-shadow:0 0 24px rgba(205,235,255,.2);animation:hammer 1.08s cubic-bezier(.045,.93,.11,1) 2.92s forwards}
+.tag{margin-top:34px;font-size:clamp(9px,.95vw,14px);font-weight:700;letter-spacing:.48em;color:#c2cbd1;opacity:0;transform:translateY(14px);animation:tag .7s ease 4.18s forwards}
+.flash{position:absolute;z-index:14;inset:0;background:#f4fbff;opacity:0;animation:flash .42s ease-out 3.62s forwards}
+.bloom{position:absolute;z-index:14;left:50%;top:50%;width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 90px 55px #dff4ff;opacity:0;transform:translate(-50%,-50%);animation:bloom .6s ease-out 3.61s forwards}
+.ring{position:absolute;z-index:15;left:50%;top:50%;width:60px;height:60px;border:4px solid rgba(235,250,255,.95);border-radius:50%;opacity:0;transform:translate(-50%,-50%) scale(.1);animation:ring .82s cubic-bezier(.05,.75,.15,1) 3.63s forwards}
+.ring.two{animation-delay:3.70s;border-width:2px}
+.ground{position:absolute;z-index:13;left:50%;top:55%;width:95vw;height:7px;background:radial-gradient(ellipse,#fff 0,rgba(195,230,250,.55) 20%,transparent 70%);filter:blur(3px);opacity:0;transform:translateX(-50%) scaleX(.02);animation:ground .9s ease-out 3.62s forwards}
+.cracks{position:absolute;z-index:16;left:50%;top:53%;width:1px;height:1px}
+.cracks i{position:absolute;width:0;height:2px;transform-origin:left;background:linear-gradient(90deg,#fff,rgba(170,215,240,.45),transparent);box-shadow:0 0 8px rgba(205,235,255,.8);animation:crack .48s ease-out 3.66s forwards}
+.cracks i:nth-child(1){transform:rotate(5deg)}.cracks i:nth-child(2){transform:rotate(25deg)}.cracks i:nth-child(3){transform:rotate(158deg)}.cracks i:nth-child(4){transform:rotate(184deg)}.cracks i:nth-child(5){transform:rotate(205deg)}.cracks i:nth-child(6){transform:rotate(332deg)}.cracks i:nth-child(7){transform:rotate(348deg)}.cracks i:nth-child(8){transform:rotate(145deg)}
+.bolt{position:absolute;z-index:17;opacity:0;width:4px;background:#f5fdff;box-shadow:0 0 15px 5px #a9e2ff;transform-origin:top;animation:bolt .32s steps(2) 3.54s forwards}
+.b1{height:48vh;left:31%;top:-4%;transform:rotate(21deg)}.b2{height:43vh;left:71%;top:-2%;transform:rotate(-25deg)}.b3{height:29vh;left:51%;top:0;transform:rotate(7deg)}
+.debris{position:absolute;z-index:17;left:50%;top:53%;width:1px;height:1px}
+.debris b{position:absolute;width:9px;height:9px;background:#c5d0d7;clip-path:polygon(12% 0,100% 25%,70% 100%,0 68%);opacity:0;animation:debris 1s cubic-bezier(.08,.72,.18,1) 3.66s forwards}
+.controls{position:absolute;z-index:40;right:20px;bottom:18px;display:flex;gap:8px}
+.controls button{border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.38);color:#9aa7af;border-radius:999px;padding:10px 14px;font:inherit;font-size:9px;font-weight:700;letter-spacing:.17em;cursor:pointer}
+.controls button:hover,.controls button:focus-visible{color:#fff;border-color:rgba(255,255,255,.35);outline:none}
+#intro.playing{animation:camera .62s linear 3.61s both}
+.impact .brand{animation:obliterate .75s cubic-bezier(.1,.75,.15,1) 3.62s forwards}
+@keyframes brandIn{to{opacity:.96}}
+@keyframes scroll{0%{transform:translateY(67vh);filter:blur(0)}23%{transform:translateY(26vh)}58%{filter:blur(.1px)}80%{filter:blur(1px)}100%{transform:translateY(-245vh);filter:blur(4px)}}
+@keyframes speed{0%,45%{opacity:0;transform:translateY(-70vh)}72%{opacity:.85}100%{opacity:0;transform:translateY(115vh)}}
+@keyframes hammer{0%{opacity:0;transform:translateY(-135vh) scale(.66,1.5);filter:blur(18px)}10%{opacity:1}66%{transform:translateY(-12px) scale(.91,1.12);filter:blur(0)}72%{transform:translateY(31px) scale(1.18,.72)}78%{transform:translateY(-18px) scale(.94,1.1)}87%{transform:translateY(7px) scale(1.035,.96)}100%{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
+@keyframes camera{0%,100%{transform:none}7%{transform:translate(-22px,14px) rotate(-.8deg)}14%{transform:translate(20px,-16px) rotate(.7deg)}24%{transform:translate(-16px,-7px) rotate(-.5deg)}35%{transform:translate(14px,11px) rotate(.4deg)}48%{transform:translate(-10px,5px)}62%{transform:translate(8px,-6px)}78%{transform:translate(-4px,3px)}}
+@keyframes flash{0%{opacity:0}15%{opacity:.96}100%{opacity:0}}
+@keyframes bloom{0%{opacity:1;transform:translate(-50%,-50%) scale(.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(13)}}
+@keyframes ring{0%{opacity:1;transform:translate(-50%,-50%) scale(.08)}100%{opacity:0;transform:translate(-50%,-50%) scale(38)}}
+@keyframes ground{0%{opacity:0;transform:translateX(-50%) scaleX(.02)}18%{opacity:1}100%{opacity:0;transform:translateX(-50%) scaleX(1.65)}}
+@keyframes crack{0%{width:0;opacity:1}100%{width:49vw;opacity:0}}
+@keyframes bolt{0%{opacity:0}20%{opacity:1}42%{opacity:.12}65%{opacity:1}100%{opacity:0}}
+@keyframes debris{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r))}}
+@keyframes obliterate{0%{opacity:1;transform:translate(0,0) scale(1);filter:none}12%{filter:brightness(3.5) blur(1px)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--rot)) scale(.08);filter:brightness(2.4) blur(12px)}}
+@keyframes tag{to{opacity:1;transform:none}}
+@keyframes top{0%{opacity:0}10%,55%{opacity:1}78%,100%{opacity:0}}
+@media(max-width:700px){.stream{grid-template-columns:1fr;inset:-45vh 7vw -120vh;gap:2vh}.brand{height:38vh;min-height:230px}.plate{width:91%;height:86%}.brand img{width:90%;height:84%;max-height:245px}.signal{font-size:22vw}}
+@media(prefers-reduced-motion:reduce){.stream,.speed,.flash,.bloom,.ring,.ground,.cracks,.bolt,.debris{display:none}#intro.playing{animation:none}.signal{animation:none;opacity:1;transform:none;filter:none}.tag{animation:none;opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<section id="intro">
+  <div class="top">AUTOMOTIVE DEFECT INTELLIGENCE</div>
+  <div class="stream">
+    {% set brands = [
+      ("toyota", "Toyota"), ("ford", "Ford"), ("tesla", "Tesla"), ("bmw", "BMW"),
+      ("honda", "Honda"), ("mercedes-benz", "Mercedes-Benz"), ("volkswagen", "Volkswagen"),
+      ("hyundai", "Hyundai"), ("kia", "Kia"), ("nissan", "Nissan"), ("chevrolet", "Chevrolet"),
+      ("audi", "Audi"), ("subaru", "Subaru"), ("lexus", "Lexus"), ("porsche", "Porsche"),
+      ("jeep", "Jeep"), ("gmc", "GMC"), ("cadillac", "Cadillac"), ("acura", "Acura"),
+      ("volvo", "Volvo"), ("mitsubishi", "Mitsubishi"), ("rivian", "Rivian"), ("byd", "BYD"),
+      ("land-rover", "Land Rover"), ("mazda", "Mazda"),
+    ] %}
+    {% for slug, name in brands %}
+    <div class="brand" style="--i:{{ loop.index0 }}">
+      <div class="plate"><img src="/static/logos/{{ slug }}.png" alt="{{ name }}" decoding="async"></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="vignette"></div>
+  <div class="speed"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="flash"></div><div class="bloom"></div><div class="ring"></div><div class="ring two"></div><div class="ground"></div>
+  <div class="bolt b1"></div><div class="bolt b2"></div><div class="bolt b3"></div>
+  <div class="cracks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="debris" id="debris"></div>
+  <div class="signalWrap"><div class="signal" translate="no">SIGNAL</div><div class="tag">SEE THE DEFECT BEFORE THE RECALL</div></div>
+  <div class="controls">
+    <button id="replayBtn" type="button">REPLAY</button>
+    <button id="skipBtn" type="button">SKIP</button>
+  </div>
+</section>
+<script>
+(function () {
+  var DASHBOARD = "/";
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Tagline finishes settling at ~4.9s; hold it briefly, then hand off.
+  var HANDOFF_MS = reduceMotion ? 1800 : 6300;
+  var handoff = null;
+
+  function go() { window.location.replace(DASHBOARD); }
+  function armHandoff() {
+    if (handoff) clearTimeout(handoff);
+    handoff = setTimeout(go, HANDOFF_MS);
+  }
+
+  function wireIntro() {
+    var current = document.getElementById("intro");
+    current.classList.remove("impact", "playing");
+    void current.offsetWidth;
+    current.classList.add("playing");
+
+    // Each plate gets its own scatter vector for the shatter.
+    current.querySelectorAll(".brand").forEach(function (el, i) {
+      var a = (i / 25) * Math.PI * 2 + (i % 4) * 0.13;
+      var d = 420 + (i % 7) * 95;
+      el.style.setProperty("--dx", Math.cos(a) * d + "px");
+      el.style.setProperty("--dy", Math.sin(a) * d + "px");
+      el.style.setProperty("--rot", (-210 + (i * 61) % 420) + "deg");
+    });
+
+    var debris = current.querySelector("#debris");
+    debris.innerHTML = "";
+    for (var i = 0; i < 52; i++) {
+      var b = document.createElement("b");
+      var a = (i / 52) * Math.PI * 2 + (i % 5) * 0.08;
+      var d = 110 + (i % 12) * 38;
+      b.style.setProperty("--x", Math.cos(a) * d + "px");
+      b.style.setProperty("--y", Math.sin(a) * d + "px");
+      b.style.setProperty("--r", (i * 97) + "deg");
+      debris.appendChild(b);
+    }
+
+    requestAnimationFrame(function () { current.classList.add("impact"); });
+
+    current.querySelector("#replayBtn").onclick = function () {
+      var fresh = current.cloneNode(true);
+      current.replaceWith(fresh);
+      wireIntro();
+    };
+    current.querySelector("#skipBtn").onclick = function () {
+      if (handoff) clearTimeout(handoff);
+      go();
+    };
+    armHandoff();
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" || e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
+  });
+  wireIntro();
+})();
+</script>
+</body>
+</html>

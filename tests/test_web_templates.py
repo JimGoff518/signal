@@ -8,6 +8,7 @@ context key or a typo in a macro fails here instead of as a 500 in prod.
 from __future__ import annotations
 
 import os
+import re
 from datetime import date, datetime
 from types import SimpleNamespace
 
@@ -370,3 +371,35 @@ def test_memos_page_flags_researched_clusters():
         },
     )
     assert html.count(">researched<") == 1
+
+
+# ─── Post-login intro ───────────────────────────────────────────────────
+
+INTRO_BRANDS = 25
+
+
+def test_intro_renders_logo_stream_with_static_files():
+    html = _render("intro.html", user="jim")
+    assert html.count('class="brand"') == INTRO_BRANDS
+    assert '<img src="data:' not in html  # logos are served from /static, not inlined
+    assert "Chakra Petch" in html and "IBM Plex Sans" in html  # matches the dashboard
+    assert "AUTOMOTIVE DEFECT INTELLIGENCE" in html and "GLOBAL" not in html
+    assert 'location.replace(DASHBOARD)' in html and 'DASHBOARD = "/"' in html
+    for src in re.findall(r'src="/static/logos/([a-z-]+\.png)"', html):
+        assert (webapp.WEB_ROOT / "static" / "logos" / src).is_file(), src
+
+
+def test_login_plays_intro_once_then_dashboard_owns_the_session():
+    from fastapi.testclient import TestClient
+
+    username, password = next(iter(webapp.settings.users().items()))
+    client = TestClient(webapp.app, base_url="https://testserver", follow_redirects=False)
+
+    assert client.get("/intro").status_code == 303  # anonymous -> /login
+    assert client.get("/intro").headers["location"] == "/login"
+
+    r = client.post("/login", data={"username": username, "password": password})
+    assert r.status_code == 303 and r.headers["location"] == "/intro"
+
+    r = client.get("/intro")
+    assert r.status_code == 200 and 'class="brand"' in r.text

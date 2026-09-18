@@ -193,8 +193,15 @@ def login(
     users = settings.users()
     if users.get(username) == password:
         request.session["user"] = username
-        return RedirectResponse("/", status_code=303)
+        # Fresh sign-in plays the intro once, then hands off to the dashboard.
+        return RedirectResponse("/intro", status_code=303)
     return RedirectResponse("/login?error=invalid", status_code=303)
+
+
+@app.get("/intro", response_class=HTMLResponse)
+def intro(request: Request, user: str = Depends(require_auth)) -> Response:
+    """Post-login splash. Standalone page; it redirects itself to `/`."""
+    return templates.TemplateResponse(request, "intro.html", {"user": user})
 
 
 @app.get("/logout")
