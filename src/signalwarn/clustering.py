@@ -118,7 +118,7 @@ def recalculate_cluster(conn: Connection, cluster_id: int) -> dict:
               MIN(c.date_complaint_filed) FILTER (WHERE live) AS first_complaint_date,
               MAX(c.date_complaint_filed) FILTER (WHERE live) AS last_complaint_date,
               COUNT(DISTINCT c.model_year) FILTER (WHERE live) AS distinct_years,
-              COUNT(*) FILTER (WHERE NOT live)                AS time_barred_count
+              COUNT(*) FILTER (WHERE NOT live)                AS time_barred_count,
               COUNT(*) FILTER (WHERE live AND c.state = 'TX') AS tx_complaint_count
             FROM cluster_complaints cc
             JOIN complaints c ON c.id = cc.complaint_id
