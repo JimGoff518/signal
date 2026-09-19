@@ -38,6 +38,16 @@ API_BASE = "https://www.courtlistener.com/api/rest/v4"
 DEFAULT_LOOKBACK_YEARS = 10
 
 
+class CourtListenerError(RuntimeError):
+    """A lookup did not complete: throttled, transport failure, or 5xx.
+
+    Distinct from an empty result on purpose. The filings check treats an
+    empty list as "no class action on file" and marks the cluster checked;
+    a failed lookup must not be recorded that way, or the cluster is never
+    looked at again.
+    """
+
+
 # Map NHTSA's normalized component buckets to richer keyword sets that show up
 # in actual class-action filings. "ENGINE" alone is too generic; pairing it
 # with "engine defect", "oil consumption", etc. matches more real filings.
@@ -127,10 +137,15 @@ class CourtListenerClient:
     def __init__(
         self,
         api_token: str | None = None,
-        min_interval_seconds: float = 0.6,
+        min_interval_seconds: float | None = None,
         timeout_seconds: float = 15.0,
     ) -> None:
         self.api_token = api_token or settings.courtlistener_api_token or None
+        # Anonymous callers get throttled around 0.6s; the first live run
+        # took 25 one-minute penalties at that pace. Back off unless a
+        # token is present or the caller says otherwise.
+        if min_interval_seconds is None:
+            min_interval_seconds = 0.6 if self.api_token else 1.5
         self.min_interval = min_interval_seconds
         self.timeout = timeout_seconds
         self._last_request_at = 0.0
@@ -158,8 +173,13 @@ class CourtListenerClient:
 
     def search(self, q: str, *, lookback_years: int = DEFAULT_LOOKBACK_YEARS,
                limit: int = 5) -> list[Filing]:
-        """Search RECAP for dockets matching `q`. Returns up to `limit` filings."""
-        self._throttle()
+        """Search RECAP for dockets matching `q`. Returns up to `limit` filings.
+
+        An empty list means the index has nothing for this query. Anything
+        that stops the lookup from completing raises CourtListenerError so
+        the caller can leave the cluster unchecked and try again later.
+        A 429 is retried once after a 60s pause.
+        """
         floor = (date.today() - timedelta(days=365 * lookback_years)).isoformat()
         params = {
             "q": q,
@@ -167,20 +187,27 @@ class CourtListenerClient:
             "filed_after": floor,
             "order_by": "score desc",
         }
-        try:
-            resp = self._session.get(f"{API_BASE}/search/", params=params, timeout=self.timeout)
-        except requests.RequestException as e:
-            log.warning("CourtListener request failed for q=%r: %s", q, e)
-            return []
-        if resp.status_code == 429:
-            log.warning("CourtListener rate-limited; sleeping 60s")
-            time.sleep(60)
-            return []
-        if not resp.ok:
-            log.warning("CourtListener %s for q=%r: %s", resp.status_code, q, resp.text[:200])
-            return []
-        results = (resp.json() or {}).get("results", [])
-        return [_parse_result(r) for r in results[:limit]]
+        for attempt in (1, 2):
+            self._throttle()
+            try:
+                resp = self._session.get(
+                    f"{API_BASE}/search/", params=params, timeout=self.timeout
+                )
+            except requests.RequestException as e:
+                raise CourtListenerError(f"request failed for q={q!r}: {e}") from e
+            if resp.status_code == 429:
+                if attempt == 1:
+                    log.warning("CourtListener rate-limited; sleeping 60s then retrying")
+                    time.sleep(60)
+                    continue
+                raise CourtListenerError(f"rate-limited twice for q={q!r}")
+            if not resp.ok:
+                raise CourtListenerError(
+                    f"HTTP {resp.status_code} for q={q!r}: {resp.text[:200]}"
+                )
+            results = (resp.json() or {}).get("results", [])
+            return [_parse_result(r) for r in results[:limit]]
+        raise CourtListenerError(f"unreachable for q={q!r}")  # pragma: no cover
 
 
 def _parse_iso_date(raw: object) -> date | None:

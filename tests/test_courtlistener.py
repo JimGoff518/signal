@@ -3,15 +3,95 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+import requests
+
 from signalwarn.courtlistener import (
     COMPONENT_KEYWORDS,
     MANUFACTURER_ALIASES,
+    CourtListenerClient,
+    CourtListenerError,
     Filing,
     _parse_result,
     build_query,
     find_class_action,
     is_plausible_filing,
 )
+
+# ─── Failed lookups must not look like "no case found" ──────────────────
+# The first live run hit 25 rate-limit pauses and 7 request failures; each
+# one returned [] and the caller marked the cluster checked-and-clean.
+
+
+class _Resp:
+    def __init__(self, status_code: int, payload: dict | None = None):
+        self.status_code = status_code
+        self.ok = 200 <= status_code < 300
+        self.text = ""
+        self._payload = payload or {}
+
+    def json(self):
+        return self._payload
+
+
+class _Session:
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.headers = {}
+        self.calls = 0
+
+    def get(self, *_, **__):
+        self.calls += 1
+        r = self._responses.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    def close(self):
+        pass
+
+
+def _client(responses, monkeypatch) -> CourtListenerClient:
+    c = CourtListenerClient(api_token="", min_interval_seconds=0)
+    c._session = _Session(responses)
+    monkeypatch.setattr("signalwarn.courtlistener.time.sleep", lambda _s: None)
+    return c
+
+
+def test_search_raises_when_rate_limited_twice(monkeypatch):
+    c = _client([_Resp(429), _Resp(429)], monkeypatch)
+    with pytest.raises(CourtListenerError):
+        c.search("q")
+    assert c._session.calls == 2  # one retry, then give up
+
+
+def test_search_retries_once_after_rate_limit(monkeypatch):
+    hit = {"caseName": "Doe v. Ford Motor Company", "court": "E.D. Mich."}
+    c = _client([_Resp(429), _Resp(200, {"results": [hit]})], monkeypatch)
+    assert [f.case_name for f in c.search("q")] == ["Doe v. Ford Motor Company"]
+
+
+def test_search_raises_on_transport_error(monkeypatch):
+    c = _client([requests.ConnectionError("boom")], monkeypatch)
+    with pytest.raises(CourtListenerError):
+        c.search("q")
+
+
+def test_search_raises_on_server_error(monkeypatch):
+    c = _client([_Resp(503)], monkeypatch)
+    with pytest.raises(CourtListenerError):
+        c.search("q")
+
+
+def test_anonymous_client_throttles_harder_than_authenticated():
+    assert CourtListenerClient(api_token="").min_interval > CourtListenerClient(
+        api_token="tok"
+    ).min_interval
+
+
+def test_search_empty_results_is_a_real_empty_list(monkeypatch):
+    c = _client([_Resp(200, {"results": []})], monkeypatch)
+    assert c.search("q") == []
 
 
 def _filing(name: str, court: str = "District Court, E.D. Michigan") -> Filing:
