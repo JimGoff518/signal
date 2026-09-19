@@ -5,10 +5,106 @@ from datetime import date
 
 from signalwarn.courtlistener import (
     COMPONENT_KEYWORDS,
+    MANUFACTURER_ALIASES,
     Filing,
     _parse_result,
     build_query,
+    find_class_action,
+    is_plausible_filing,
 )
+
+
+def _filing(name: str, court: str = "District Court, E.D. Michigan") -> Filing:
+    return Filing(
+        case_name=name,
+        court=court,
+        date_filed=date(2024, 1, 1),
+        docket_number="1:24-cv-00001",
+        absolute_url="/docket/1/",
+    )
+
+
+# ─── Match validation (added after the first live run matched pension
+# funds and drug companies to pickup trucks) ────────────────────────────
+
+
+def test_plausible_filing_requires_manufacturer_in_caption():
+    assert is_plausible_filing(_filing("Norman v. FCA US, LLC"), "RAM")
+    assert is_plausible_filing(_filing("Hermanowicz v. General Motors, LLC"), "CHEVROLET")
+    assert is_plausible_filing(
+        _filing("In re: General Motors LLC CP4 Fuel Pump Litigation"), "GMC"
+    )
+    # Real false positives from the 2026-09-19 run.
+    assert not is_plausible_filing(
+        _filing("UFCW Local 1500 Welfare Fund v. Takeda Pharmaceuticals USA, Inc."), "RAM"
+    )
+    assert not is_plausible_filing(
+        _filing("Michiana Area Electrical Workers' Pension Fund v. Inari Medical, Inc."),
+        "RAM",
+    )
+    assert not is_plausible_filing(_filing("DINITZ v. VERISK ANALYTICS, INC."), "CHEVROLET")
+
+
+def test_plausible_filing_rejects_bankruptcy_court():
+    f = _filing(
+        "Tyler Jacob Pressdee and Alexis Marie Pressdee",
+        court="United States Bankruptcy Court, W.D. North Carolina",
+    )
+    assert not is_plausible_filing(f, "CHEVROLET")
+
+
+def test_plausible_filing_does_not_cross_manufacturers():
+    # Same corporate group, different legal entity: not the same defendant.
+    assert not is_plausible_filing(_filing("Musgrave v. Hyundai Motor America, Inc."), "KIA")
+
+
+def test_plausible_filing_accepts_parent_company_names():
+    assert is_plausible_filing(_filing("Frisch v. FCA US, LLC"), "JEEP")
+    assert is_plausible_filing(_filing("Doe v. Stellantis N.V."), "RAM")
+    assert is_plausible_filing(_filing("Doe v. American Honda Motor Co., Inc."), "HONDA")
+
+
+def test_manufacturer_aliases_cover_every_tracked_make():
+    from signalwarn.ingestion import TRACKED_VEHICLES
+
+    for make in {v[0] for v in TRACKED_VEHICLES}:
+        assert make in MANUFACTURER_ALIASES, make
+
+
+def test_parse_result_strips_html_from_case_name():
+    raw = 'Flick v. Toyota Motor Corporation<b><font color="red">PURSUANT TO ORDER</font></b>'
+    assert _parse_result({"caseName": raw, "court": "x"}).case_name == (
+        "Flick v. Toyota Motor Corporation PURSUANT TO ORDER"
+    )
+
+
+class _FakeClient:
+    def __init__(self, results):
+        self._results = results
+        self.calls = []
+
+    def search(self, q, *, limit=5, **_):
+        self.calls.append((q, limit))
+        return self._results[:limit]
+
+
+def test_find_class_action_skips_implausible_top_hit():
+    client = _FakeClient(
+        [
+            _filing("UFCW Local 1500 Welfare Fund v. Takeda Pharmaceuticals USA, Inc."),
+            _filing("Norman v. FCA US, LLC"),
+        ]
+    )
+    f = find_class_action(client, "RAM", "1500", "POWER TRAIN")
+    assert f is not None and f.case_name.startswith("Norman")
+    assert client.calls[0][1] >= 5  # asks for more than one so it has fallbacks
+
+
+def test_find_class_action_returns_none_when_nothing_plausible():
+    client = _FakeClient(
+        [_filing("UFCW Local 1500 Welfare Fund v. Takeda Pharmaceuticals USA, Inc.")]
+    )
+    assert find_class_action(client, "RAM", "1500", "POWER TRAIN") is None
 
 
 # ─── Query construction ─────────────────────────────────────────────────

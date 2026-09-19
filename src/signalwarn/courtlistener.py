@@ -23,6 +23,7 @@ Design choices:
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -56,6 +57,35 @@ COMPONENT_KEYWORDS: dict[str, str] = {
     "STRUCTURE": "frame OR roof OR structural",
     "OTHER": "",  # too generic to be useful — caller should skip
 }
+
+# Words that must appear in a case caption for a search hit to count as a
+# class action against this manufacturer. RECAP search is full-text over
+# docket entries, so without this check the top hit for "Ram" "1500" was a
+# pension fund called Local 1500 suing a drug company (2026-09-19 run).
+# Parent and holding companies are listed because the defendant is usually
+# the corporate entity, not the brand. Corporate cousins that are separate
+# legal entities (Hyundai / Kia) are deliberately NOT cross-listed.
+MANUFACTURER_ALIASES: dict[str, tuple[str, ...]] = {
+    "FORD": ("ford",),
+    "CHEVROLET": ("general motors", "chevrolet"),
+    "GMC": ("general motors", "gmc"),
+    "JEEP": ("fca", "chrysler", "stellantis", "jeep"),
+    "RAM": ("fca", "chrysler", "stellantis", "ram truck"),
+    "HONDA": ("honda", "acura"),
+    "TOYOTA": ("toyota", "lexus"),
+    "HYUNDAI": ("hyundai",),
+    "KIA": ("kia",),
+    "NISSAN": ("nissan", "infiniti"),
+    "TESLA": ("tesla",),
+}
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+
+
+def _clean_caption(raw: str) -> str:
+    """Strip the HTML and clerk formatting CourtListener leaves in caseName."""
+    return _WS_RE.sub(" ", _HTML_TAG_RE.sub(" ", raw)).strip()
 
 
 @dataclass
@@ -113,7 +143,7 @@ class CourtListenerClient:
             "detection for Goff Law PLLC"
         )
 
-    def __enter__(self) -> "CourtListenerClient":
+    def __enter__(self) -> CourtListenerClient:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -171,7 +201,7 @@ def _parse_result(r: dict) -> Filing:
     the field name shifts again.
     """
     return Filing(
-        case_name=str(r.get("caseName") or r.get("caseNameShort") or "(unknown)").strip(),
+        case_name=_clean_caption(str(r.get("caseName") or r.get("caseNameShort") or "(unknown)")),
         court=str(r.get("court") or r.get("court_id") or "").strip(),
         date_filed=_parse_iso_date(r.get("dateFiled")),
         docket_number=str(r.get("docketNumber") or "").strip(),
@@ -196,11 +226,32 @@ def build_query(make: str, model: str, component: str) -> str | None:
     return f'"{make.title()}" "{model.title()}" ({component_terms}) "class action"'
 
 
+def is_plausible_filing(filing: Filing, make: str) -> bool:
+    """Is this search hit actually a case against `make`'s manufacturer?
+
+    Two checks. The caption must name the manufacturer or its parent
+    (see MANUFACTURER_ALIASES), and the court must not be a bankruptcy
+    court. Both are cheap and both rule out the false positives the first
+    live run produced.
+    """
+    if "bankruptcy" in filing.court.lower():
+        return False
+    caption = filing.case_name.lower()
+    aliases = MANUFACTURER_ALIASES.get(make.upper(), (make.lower(),))
+    return any(alias in caption for alias in aliases)
+
+
 def find_class_action(client: CourtListenerClient, make: str, model: str,
                       component: str) -> Filing | None:
-    """Convenience: return the top filing for (make, model, component) or None."""
+    """Return the best plausible filing for (make, model, component), or None.
+
+    Asks for several hits and returns the first that passes
+    `is_plausible_filing`, so a noisy top result does not poison the cluster.
+    """
     q = build_query(make, model, component)
     if q is None:
         return None
-    results = client.search(q, limit=1)
-    return results[0] if results else None
+    for filing in client.search(q, limit=5):
+        if is_plausible_filing(filing, make):
+            return filing
+    return None

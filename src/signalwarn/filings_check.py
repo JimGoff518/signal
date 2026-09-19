@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from signalwarn.courtlistener import (
     CourtListenerClient,
@@ -42,7 +42,7 @@ def run_check_filings(
     elif recheck_days is None:
         where_clauses.append("class_action_checked_at IS NULL")
     else:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=recheck_days)
+        cutoff = datetime.now(UTC) - timedelta(days=recheck_days)
         where_clauses.append(
             "(class_action_checked_at IS NULL OR class_action_checked_at < %(cutoff)s)"
         )
@@ -76,6 +76,7 @@ def run_check_filings(
     skipped = 0
     errors = 0
     start = time.time()
+    start_ts = datetime.now(UTC)
 
     with CourtListenerClient() as client:
         for i, c in enumerate(clusters, 1):
@@ -93,7 +94,7 @@ def run_check_filings(
                 continue
             try:
                 filing = find_class_action(client, c["make"], c["model"], c["component"])
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 log.warning("error on cluster %s (%s %s %s): %s",
                             c["id"], c["make"], c["model"], c["component"], e)
                 errors += 1
@@ -116,16 +117,17 @@ def run_check_filings(
         elapsed_seconds=elapsed,
     )
 
-    if matched and not dry_run:
-        # Re-score just the matched clusters so the -30 penalty applies now,
+    if clusters and not dry_run:
+        # Re-score every cluster this run touched so the -30 penalty lands
+        # now on new matches and is lifted from clusters a re-check cleared,
         # rather than waiting for the next ingestion.
-        log.info("Rescoring %s matched clusters to apply the -30 penalty…", matched)
+        log.info("Rescoring %s checked clusters to apply or lift the -30 penalty…",
+                 len(clusters))
         with connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id FROM clusters WHERE class_action_filed = TRUE "
-                    "AND class_action_checked_at >= %s",
-                    (datetime.now(timezone.utc) - timedelta(hours=2),),
+                    "SELECT id FROM clusters WHERE class_action_checked_at >= %s",
+                    (start_ts,),
                 )
                 ids = [r["id"] for r in cur.fetchall()]
             for cid in ids:
@@ -140,7 +142,7 @@ def _mark_checked(cluster_id: int, *, filing, dry_run: bool) -> None:
     dashboard by `web.queries.list_clusters` (status filter)."""
     if dry_run:
         return
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with connection() as conn, conn.cursor() as cur:
         if filing is None:
             cur.execute(
