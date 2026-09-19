@@ -238,6 +238,35 @@ def test_cluster_login_admin_render():
     assert 'enctype="multipart/form-data"' in html and 'name="files"' in html
 
 
+def _cluster_page(**over) -> str:
+    return _render(
+        "cluster.html",
+        title="x",
+        user="jim",
+        cluster=_cluster(**over),
+        complaints=[],
+        states=[],
+        volume=[],
+        page=1,
+        last_page=1,
+        total_complaints=0,
+        ticker=None,
+    )
+
+
+def test_cluster_page_distinguishes_same_defect_from_vehicle_level_match():
+    same = _cluster_page(class_action_filed=True, class_action_same_defect=True)
+    assert "this defect" in same
+    assert "this vehicle" not in same
+
+    vehicle = _cluster_page(class_action_filed=True, class_action_same_defect=False)
+    assert "this vehicle" in vehicle
+    assert "this defect" not in vehicle
+
+    none = _cluster_page(class_action_filed=False, class_action_same_defect=False)
+    assert "this vehicle" not in none and "this defect" not in none
+
+
 def test_admin_page_links_to_system_map():
     """The system map is reachable from /admin and opens in a new tab."""
     status = {

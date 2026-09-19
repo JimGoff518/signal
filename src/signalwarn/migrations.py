@@ -99,6 +99,13 @@ PENDING: list[tuple[str, str]] = [
           ADD COLUMN IF NOT EXISTS ewr_injury_count   INTEGER NOT NULL DEFAULT 0;
         """,
     ),
+    (
+        "2026-09-19 — filings check: same-defect flag (only these hide a cluster)",
+        """
+        ALTER TABLE clusters
+          ADD COLUMN IF NOT EXISTS class_action_same_defect BOOLEAN NOT NULL DEFAULT FALSE;
+        """,
+    ),
 ]
 
 

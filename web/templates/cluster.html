@@ -21,7 +21,8 @@
     <span class="text-sm text-zinc-400 num font-mono">Score {{ cluster.score }}/100</span>
     {% if cluster.recall_issued %}<span class="pill text-amber-300 ring-amber-500/30">Recall issued</span>{% endif %}
     {% if cluster.nhtsa_investigation_open %}<span class="pill text-orange-300 ring-orange-500/30">NHTSA probe open</span>{% endif %}
-    {% if cluster.class_action_filed %}<span class="pill text-rose-300 ring-rose-500/30">Class action {{ cluster.class_action_status or 'filed' }}</span>{% endif %}
+    {% if cluster.class_action_filed and cluster.class_action_same_defect %}<span class="pill text-rose-300 ring-rose-500/30">Class action {{ cluster.class_action_status or 'filed' }} on this defect</span>
+    {% elif cluster.class_action_filed %}<span class="pill text-amber-300 ring-amber-500/30">Class action {{ cluster.class_action_status or 'filed' }} on this vehicle</span>{% endif %}
   </div>
   <h1 class="font-display text-3xl font-semibold tracking-tight">{{ vehicle }}</h1>
   <p class="text-zinc-400 mt-1">{{ cluster.component }}</p>
@@ -30,6 +31,11 @@
     <span class="text-rose-300">{{ cluster.class_action_case_name }}</span>{% if cluster.class_action_court %} · {{ cluster.class_action_court }}{% endif %}{% if cluster.class_action_filed_date %} · filed {{ cluster.class_action_filed_date }}{% endif %}
     {% if cluster.class_action_url %} · <a href="{{ cluster.class_action_url }}" target="_blank" rel="noopener" class="text-zinc-300 hover:text-zinc-100 underline underline-offset-2 rounded">CourtListener ↗</a>{% endif %}
   </p>
+  {% if not cluster.class_action_same_defect %}
+  <p class="text-xs text-zinc-500 mt-1">
+    The court record names the maker and the vehicle, not the part. This case may be about a different defect, so the cluster stays on the dashboard with a 30-point penalty.
+  </p>
+  {% endif %}
   {% endif %}
 </div>
 

@@ -16,6 +16,7 @@ from signalwarn.courtlistener import (
     build_query,
     find_class_action,
     is_plausible_filing,
+    names_defect,
 )
 
 # ─── Failed lookups must not look like "no case found" ──────────────────
@@ -178,6 +179,43 @@ def test_find_class_action_skips_implausible_top_hit():
     f = find_class_action(client, "RAM", "1500", "POWER TRAIN")
     assert f is not None and f.case_name.startswith("Norman")
     assert client.calls[0][1] >= 5  # asks for more than one so it has fallbacks
+
+
+def test_names_defect_when_caption_carries_the_component():
+    assert names_defect(_filing("In re: Kia Engine Litigation"), "ENGINE")
+    assert names_defect(
+        _filing("In re: General Motors LLC CP4 Fuel Pump Litigation"), "FUEL SYSTEM"
+    )
+    assert names_defect(_filing("In re: Takata Airbag Products Liability Litigation"), "AIR BAGS")
+    assert names_defect(_filing("Doe v. Ford Motor Co. (PowerShift Transmission)"), "POWER TRAIN")
+
+
+def test_names_defect_false_for_vehicle_only_captions():
+    # The 2026-09-19 run attached this one case to 17 Grand Cherokee clusters.
+    assert not names_defect(_filing("Frisch v. FCA US, LLC"), "BRAKES")
+    assert not names_defect(_filing("Frisch v. FCA US, LLC"), "SUSPENSION")
+    assert not names_defect(_filing("Norman v. FCA US, LLC"), "STEERING")
+
+
+def test_names_defect_matches_whole_words_only():
+    assert not names_defect(_filing("Shockley v. FCA US, LLC"), "SUSPENSION")
+    assert not names_defect(_filing("Seattle Owners v. Ford Motor Co."), "SEAT BELTS")
+
+
+def test_names_defect_false_for_generic_component():
+    assert not names_defect(_filing("In re: Kia Engine Litigation"), "OTHER")
+
+
+def test_component_keywords_cover_the_component_names_actually_in_the_db():
+    """The cluster table uses NHTSA's bucket names, not the shorthand the map
+    was first written with. Every live bucket except OTHER needs terms."""
+    live = {
+        "ELECTRICAL", "ENGINE", "AIR BAGS", "BRAKES", "POWER TRAIN", "STEERING",
+        "FUEL SYSTEM", "STRUCTURE", "SUSPENSION", "SPEED CONTROL", "LIGHTING",
+        "SEAT BELTS", "TIRES",
+    }
+    for bucket in live:
+        assert COMPONENT_KEYWORDS.get(bucket), bucket
 
 
 def test_find_class_action_returns_none_when_nothing_plausible():

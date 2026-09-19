@@ -14,8 +14,16 @@ def test_build_filters_defaults_hide_noise_and_filed():
     assert params == {}
 
 
-def test_exclude_filed_predicate_hides_pending_and_terminated():
-    assert queries.EXCLUDE_FILED_SQL == "c.class_action_filed = FALSE"
+def test_exclude_filed_predicate_hides_only_same_defect_matches():
+    """A filed case hides a cluster only when the caption names this defect.
+
+    A vehicle-level match (any case against the maker about this model)
+    still carries the -30 penalty and shows on the cluster page, but does
+    not black out the cluster. Pending vs terminated still does not matter.
+    """
+    assert queries.EXCLUDE_FILED_SQL == (
+        "NOT (c.class_action_filed AND c.class_action_same_defect)"
+    )
 
 
 def test_build_filters_component_recall_filed():

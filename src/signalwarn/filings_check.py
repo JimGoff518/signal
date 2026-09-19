@@ -16,6 +16,7 @@ from signalwarn.courtlistener import (
     CourtListenerClient,
     build_query,
     find_class_action,
+    names_defect,
 )
 from signalwarn.db import connection
 from signalwarn.historical import recalculate_cluster
@@ -90,7 +91,7 @@ def run_check_filings(
             q = build_query(c["make"], c["model"], c["component"])
             if q is None:
                 skipped += 1
-                _mark_checked(c["id"], filing=None, dry_run=dry_run)
+                _mark_checked(c["id"], filing=None, same_defect=False, dry_run=dry_run)
                 continue
             try:
                 filing = find_class_action(client, c["make"], c["model"], c["component"])
@@ -99,17 +100,19 @@ def run_check_filings(
                             c["id"], c["make"], c["model"], c["component"], e)
                 errors += 1
                 continue
+            same_defect = bool(filing) and names_defect(filing, c["component"])
             if filing:
                 matched += 1
                 tag = filing.status.upper()
                 if filing.status == "terminated":
                     tag += f" {filing.date_terminated}"
+                tag += " SAME DEFECT" if same_defect else " vehicle only"
                 log.info(
                     "  match [%s]: %s %s %s [%s] → %s (%s, filed %s)",
                     tag, c["make"], c["model"], c["component"], c["classification"],
                     filing.case_name, filing.court, filing.date_filed,
                 )
-            _mark_checked(c["id"], filing=filing, dry_run=dry_run)
+            _mark_checked(c["id"], filing=filing, same_defect=same_defect, dry_run=dry_run)
 
     elapsed = time.time() - start
     summary.update(
@@ -137,9 +140,9 @@ def run_check_filings(
     return summary
 
 
-def _mark_checked(cluster_id: int, *, filing, dry_run: bool) -> None:
-    """Persist the check result. Terminated cases are filtered out of the
-    dashboard by `web.queries.list_clusters` (status filter)."""
+def _mark_checked(cluster_id: int, *, filing, same_defect: bool, dry_run: bool) -> None:
+    """Persist the check result. Only a same-defect match hides the cluster
+    (EXCLUDE_FILED_SQL); a vehicle-level match keeps the -30 penalty."""
     if dry_run:
         return
     now = datetime.now(UTC)
@@ -149,6 +152,7 @@ def _mark_checked(cluster_id: int, *, filing, dry_run: bool) -> None:
                 """
                 UPDATE clusters
                    SET class_action_filed = FALSE,
+                       class_action_same_defect = FALSE,
                        class_action_url = NULL,
                        class_action_case_name = NULL,
                        class_action_court = NULL,
@@ -165,6 +169,7 @@ def _mark_checked(cluster_id: int, *, filing, dry_run: bool) -> None:
                 """
                 UPDATE clusters
                    SET class_action_filed = TRUE,
+                       class_action_same_defect = %s,
                        class_action_url = %s,
                        class_action_case_name = %s,
                        class_action_court = %s,
@@ -174,7 +179,7 @@ def _mark_checked(cluster_id: int, *, filing, dry_run: bool) -> None:
                        class_action_checked_at = %s
                  WHERE id = %s
                 """,
-                (filing.url, filing.case_name, filing.court,
+                (same_defect, filing.url, filing.case_name, filing.court,
                  filing.date_filed, filing.status, filing.date_terminated,
                  now, cluster_id),
             )

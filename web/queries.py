@@ -127,8 +127,13 @@ def _build_filters(
         where.append("c.recall_issued = FALSE")
 
     if filed == "1":
+        # Audit view: every cluster with any case on file, same-defect or not.
         where.append("c.class_action_filed = TRUE")
+    elif filed == "0":
+        # Strict: no case against the maker about this vehicle at all.
+        where.append("c.class_action_filed = FALSE")
     else:
+        # Default: hide only clusters whose case names this defect.
         where.append(EXCLUDE_FILED_SQL)
 
     # Phase 2 Texas filter: at least N live complaints from Texas owners.

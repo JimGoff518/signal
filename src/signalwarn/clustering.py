@@ -31,7 +31,12 @@ LIVE_COMPLAINT_SQL = (
 # that should agree with the dashboard (tier counts, header stats, memo
 # generation, digest, death alerts) uses this predicate. Pending or terminated
 # makes no difference: once a class action is on file the opportunity is gone.
-EXCLUDE_FILED_SQL = "c.class_action_filed = FALSE"
+# §7.6(2). A filed case hides a cluster only when the caption names this
+# cluster's defect. A vehicle-level match (any case against the maker about
+# this model) keeps the -30 penalty and shows on the cluster page, but does
+# not black out the cluster: the 2026-09-19 run showed one Grand Cherokee
+# case would otherwise hide seventeen unrelated clusters.
+EXCLUDE_FILED_SQL = "NOT (c.class_action_filed AND c.class_action_same_defect)"
 
 
 def sol_floor(today: date, years: int) -> date:

@@ -52,19 +52,26 @@ class CourtListenerError(RuntimeError):
 # in actual class-action filings. "ENGINE" alone is too generic; pairing it
 # with "engine defect", "oil consumption", etc. matches more real filings.
 COMPONENT_KEYWORDS: dict[str, str] = {
+    # Keys are the bucket names as they appear on the clusters table.
     "ENGINE": "engine OR oil consumption OR rod bearing",
-    "TRANSMISSION": "transmission OR shudder OR shift",
+    "POWER TRAIN": "transmission OR powertrain OR drivetrain OR shudder OR shift",
     "BRAKES": "brake OR master cylinder OR vacuum pump",
     "FUEL SYSTEM": "fuel pump OR fuel injector OR fuel tank",
-    "ELECTRICAL": "electrical OR fuel pump OR wiring",
+    "ELECTRICAL": "electrical OR wiring OR battery OR infotainment",
     "STEERING": "steering OR power steering",
     "SUSPENSION": "suspension OR strut OR shock",
-    "AIRBAG": "airbag OR Takata",
+    "AIR BAGS": "airbag OR air bag OR Takata OR inflator",
+    "SEAT BELTS": "seatbelt OR seat belt OR seat",
+    "SPEED CONTROL": "unintended acceleration OR cruise control OR throttle",
+    "LIGHTING": "headlight OR headlamp OR tail light OR lighting",
     "TIRES": "tire OR tread separation",
+    "STRUCTURE": "frame OR roof OR structural OR sunroof OR windshield",
     "EXTERIOR": "paint OR rust OR corrosion",
+    # Older shorthand kept so nothing that passes these breaks.
+    "TRANSMISSION": "transmission OR shudder OR shift",
+    "AIRBAG": "airbag OR Takata",
     "SEATS": "seatbelt OR seat",
     "VEHICLE SPEED CONTROL": "unintended acceleration OR cruise control",
-    "STRUCTURE": "frame OR roof OR structural",
     "OTHER": "",  # too generic to be useful — caller should skip
 }
 
@@ -266,6 +273,27 @@ def is_plausible_filing(filing: Filing, make: str) -> bool:
     caption = filing.case_name.lower()
     aliases = MANUFACTURER_ALIASES.get(make.upper(), (make.lower(),))
     return any(alias in caption for alias in aliases)
+
+
+def names_defect(filing: Filing, component: str) -> bool:
+    """Does the case caption itself name this cluster's component?
+
+    Captions rarely do, so this is deliberately narrow: it is TRUE for
+    consolidated matters like "In re: Kia Engine Litigation" or "CP4 Fuel
+    Pump Litigation" and FALSE for "Smith v. Ford". Only a TRUE here hides
+    the cluster from the dashboard; see EXCLUDE_FILED_SQL in clustering.
+    """
+    terms = COMPONENT_KEYWORDS.get(component.upper(), "")
+    if not terms:
+        return False
+    caption = filing.case_name.lower()
+    # Whole words only: "shock" must not match a plaintiff named Shockley,
+    # and "seat" must not match Seattle.
+    return any(
+        re.search(rf"\b{re.escape(t.strip().lower())}\b", caption)
+        for t in terms.split(" OR ")
+        if t.strip()
+    )
 
 
 def find_class_action(client: CourtListenerClient, make: str, model: str,

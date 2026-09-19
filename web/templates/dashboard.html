@@ -95,7 +95,7 @@
     <div>
       <label for="f-filed" class="field-label">Class action</label>
       <select id="f-filed" name="filed" class="field" onchange="this.form.submit()">
-        <option value="" {% if selected_filed != '1' %}selected{% endif %}>Excluded</option>
+        <option value="" {% if selected_filed != '1' %}selected{% endif %}>Same-defect filings hidden</option>
         <option value="1" {% if selected_filed == '1' %}selected{% endif %}>Show filed only</option>
       </select>
     </div>

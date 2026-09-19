@@ -115,6 +115,11 @@ ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_filed_date DATE;
 -- means no opportunity for a new firm).
 ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_status TEXT;
 ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_terminated_date DATE;
+-- TRUE only when the case caption names this cluster's component ("In re:
+-- Kia Engine Litigation" on an ENGINE cluster). A vehicle-level match keeps
+-- class_action_filed = TRUE for the -30 penalty and the cluster page, but
+-- only a same-defect match hides the cluster (see EXCLUDE_FILED_SQL).
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS class_action_same_defect BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_clusters_class_action_filed
   ON clusters (class_action_filed) WHERE class_action_filed = TRUE;
