@@ -12,6 +12,8 @@ from anthropic import Anthropic
 from signalwarn.clustering import EXCLUDE_FILED_SQL
 from signalwarn.config import settings
 from signalwarn.db import connection
+from signalwarn.jev_shadow import run_jev_shadow_batch
+from signalwarn.research import recommended_action
 
 
 def _anthropic_client() -> Anthropic:
@@ -191,4 +193,18 @@ def regenerate_memo_if_needed(cluster_id: int, force: bool = False) -> bool:
         )
 
     log.info("Wrote viability memo for cluster %s", cluster_id)
+
+    # Shadow Jev judgments on the new memo — logged only, fails open.
+    if settings.jev_shadow_enabled:
+        try:
+            run_jev_shadow_batch(
+                cluster_id,
+                cluster,
+                memo,
+                states=states,
+                sample_descriptions=descriptions,
+                claude_recommended_action=recommended_action(memo),
+            )
+        except Exception as e:
+            log.warning("jev_shadow failed for cluster %s: %s", cluster_id, e)
     return True

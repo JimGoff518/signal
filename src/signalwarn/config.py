@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     # Get one free at https://www.courtlistener.com/help/api/rest/#authentication
     courtlistener_api_token: str = Field("", description="CourtListener API token (optional)")
 
+    # TypeSafe Jev — shadow judgments on each new viability memo, logged only
+    # (no DB writes yet). Off by default; see signalwarn/jev_shadow.py.
+    typesafe_api_key: str = Field("", description="TypeSafe API key for Jev shadow judgments")
+    jev_model: str = Field("jev-1.13.0")
+    jev_shadow_enabled: bool = Field(False, description="Send new memos to Jev and log answers")
+
     # Pinecone — Phase 2: semantic similarity across complaint narratives.
     # Phase 1 doesn't read these but they're recognized so .env loads cleanly.
     pinecone_api_key: str = Field("", description="Pinecone API key")
