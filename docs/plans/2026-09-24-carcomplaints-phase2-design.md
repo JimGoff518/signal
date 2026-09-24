@@ -74,31 +74,40 @@ Normalize `make` / `model` / `year` and map `category_slug` → Signal `componen
 3. Match to clusters; flag `carcomplaints_only` vs `nhtsa_and_carcomplaints`
 4. MCP / script for “open CarComplaints for this cluster” + nightly delta on WATCH+
 
-## Pilot list (10)
-Interim URLs from live site; replace 9–10 with `python scripts/top_clusters.py` (exclude `OTHER`):
+## Pilot list (10) — live CRITICAL @ score 100 (2026-09-24)
+Source: prod DB via Jev Scout — Signal. All CRITICAL at 100 (no HOT in this top slice).
 
-1. 2020 Chevrolet Trax — brakes / Stabilitrak
-2. 2018 Mazda CX-5 — engine head
-3. 2024 Mazda CX-90 Hybrid — rear brake squeal
-4. 2002 Ford Explorer — worst vehicles
-5. 2019 Toyota RAV4 — worst vehicles
-6. 2003 Honda Accord — worst vehicles
-7. 2016 Hyundai Tucson — `body_paint/structure-body.shtml`
-8. 2015 Dodge Challenger — `body_paint/`
-9. TBD HOT from `top_clusters.py`
-10. TBD HOT from `top_clusters.py`
+| # | Make | Model | Year | Component | Multi-year | Complaints | Span |
+|---|------|-------|------|-----------|------------|------------|------|
+| 1 | HYUNDAI | ELANTRA | 2012 | ELECTRICAL | no | 87 | 2015-01-05 → 2026-01-28 |
+| 2 | TESLA | MODEL Y | 2022 | OTHER | no | 325 | ⚠️ skip/remap OTHER |
+| 3 | RAM | 1500 | multi | ENGINE | yes | 1172 | 2022-09-29 → 2026-05-02 |
+| 4 | CHEVROLET | SUBURBAN 1500 | multi | BRAKES | yes | 70 | 2015-01-02 → 2025-06-10 |
+| 5 | CHEVROLET | SILVERADO | multi | ELECTRICAL | yes | 86 | 2015-01-02 → 2023-10-11 |
+| 6 | CHEVROLET | SILVERADO | multi | AIR BAGS | yes | 132 | 2015-01-02 → 2024-12-26 |
+| 7 | CHEVROLET | SUBURBAN | multi | OTHER | yes | 118 | ⚠️ skip OTHER |
+| 8 | GMC | YUKON | multi | BRAKES | yes | 84 | 2022-10-04 → 2026-05-04 |
+| 9 | FORD | F-150 | multi | POWER TRAIN | yes | 3956 | 2022-09-19 → 2026-05-04 |
+| 10 | TOYOTA | TACOMA | multi | ENGINE | yes | 75 | 2022-11-22 → 2026-04-20 |
+
+**MVP extract order (non-OTHER):** #1, #3, #4, #5, #6, #8, #9, #10.
+
+**CarComplaints year handling:** single-year locked for Elantra 2012; multi-year clusters need peak-year pick or year-range crawl then roll-up (CarComplaints is year-keyed).
+
+**First URL probes:** `Hyundai/Elantra/2012/` electrical; `Ram/1500/{year}/engine`; `Chevrolet/Silverado/{year}/` electrical + airbags; `Ford/F-150/{year}/` powertrain; `Toyota/Tacoma/{year}/engine`; Suburban/Yukon brakes categories.
 
 ## Watch-outs
 - Robots.txt / ToS / rate limits
 - PII in owner narratives
 - America-only filter on `state` when present
 - Do not replace NHTSA ingestion
+- Skip or remapped `OTHER` component clusters until normalize improves
 
 ## Acceptance criteria
-- [ ] Staging table has ≥10 pilot pages
-- [ ] ≥7/10 join to a Signal cluster key or are explicitly unmatched
-- [ ] Script or dashboard shows CarComplaints corroboration on a HOT cluster
+- [ ] Staging table has ≥8 non-OTHER pilot pages from the CRITICAL list
+- [ ] ≥7/8 join to a Signal cluster key or are explicitly unmatched
+- [ ] Script or dashboard shows CarComplaints corroboration on a CRITICAL cluster
 - [ ] Phase 2 checklist in `SIGNAL_PLAN_AND_GOALS.md` links here
 
 ## Source
-WebScrape R&D draft for Jimmy Goff, 2026-09-24.
+WebScrape R&D draft for Jimmy Goff, 2026-09-24; pilot keys from Jev Scout — Signal live DB.
