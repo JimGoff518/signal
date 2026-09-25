@@ -27,7 +27,8 @@ def test_candidates_query_targets_unresearched_critical_and_hot():
     sql, params = research.candidates_query(limit=7)
     assert "research_memo IS NULL" in sql
     assert "'CRITICAL'" in sql and "'HOT'" in sql
-    assert "class_action_status" in sql  # terminated cases are not worth researching
+    assert "class_action_status" in sql  # terminated / cert_denied are not open-cert research targets
+    assert "cert_denied" in sql
     assert "ORDER BY" in sql and "score DESC" in sql
     assert params == {"limit": 7}
 
