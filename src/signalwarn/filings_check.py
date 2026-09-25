@@ -18,6 +18,11 @@ from signalwarn.courtlistener import (
     find_class_action,
     names_defect,
 )
+from signalwarn.filing_corrections import (
+    correction_notes,
+    same_defect_override,
+    status_override,
+)
 from signalwarn.db import connection
 from signalwarn.historical import recalculate_cluster
 
@@ -91,7 +96,7 @@ def run_check_filings(
             q = build_query(c["make"], c["model"], c["component"])
             if q is None:
                 skipped += 1
-                _mark_checked(c["id"], filing=None, same_defect=False, dry_run=dry_run)
+                _mark_checked(c["id"], filing=None, same_defect=False, status=None, dry_run=dry_run)
                 continue
             try:
                 filing = find_class_action(client, c["make"], c["model"], c["component"])
@@ -100,19 +105,32 @@ def run_check_filings(
                             c["id"], c["make"], c["model"], c["component"], e)
                 errors += 1
                 continue
-            same_defect = bool(filing) and names_defect(filing, c["component"])
             if filing:
+                override = same_defect_override(filing)
+                same_defect = (
+                    override if override is not None
+                    else names_defect(filing, c["component"])
+                )
+                status = status_override(filing) or filing.status
                 matched += 1
-                tag = filing.status.upper()
-                if filing.status == "terminated":
+                tag = status.upper()
+                if status == "terminated" and filing.date_terminated:
                     tag += f" {filing.date_terminated}"
                 tag += " SAME DEFECT" if same_defect else " vehicle only"
+                notes = correction_notes(filing)
                 log.info(
-                    "  match [%s]: %s %s %s [%s] → %s (%s, filed %s)",
+                    "  match [%s]: %s %s %s [%s] → %s (%s, filed %s)%s",
                     tag, c["make"], c["model"], c["component"], c["classification"],
                     filing.case_name, filing.court, filing.date_filed,
+                    f" — {notes[0]}" if notes else "",
                 )
-            _mark_checked(c["id"], filing=filing, same_defect=same_defect, dry_run=dry_run)
+            else:
+                same_defect = False
+                status = None
+            _mark_checked(
+                c["id"], filing=filing, same_defect=same_defect,
+                status=status, dry_run=dry_run,
+            )
 
     elapsed = time.time() - start
     summary.update(
@@ -140,9 +158,15 @@ def run_check_filings(
     return summary
 
 
-def _mark_checked(cluster_id: int, *, filing, same_defect: bool, dry_run: bool) -> None:
+def _mark_checked(cluster_id: int, *, filing, same_defect: bool,
+                  status: str | None = None, dry_run: bool = False) -> None:
     """Persist the check result. Only a same-defect match hides the cluster
-    (EXCLUDE_FILED_SQL); a vehicle-level match keeps the -30 penalty."""
+    (EXCLUDE_FILED_SQL); a vehicle-level match keeps the -30 penalty.
+
+    `status` overrides Filing.status when Scout corrections pin a value such
+    as cert_denied (O'Connor 10R80). No schema change — class_action_status
+    is already TEXT.
+    """
     if dry_run:
         return
     now = datetime.now(UTC)
@@ -180,6 +204,6 @@ def _mark_checked(cluster_id: int, *, filing, same_defect: bool, dry_run: bool) 
                  WHERE id = %s
                 """,
                 (same_defect, filing.url, filing.case_name, filing.court,
-                 filing.date_filed, filing.status, filing.date_terminated,
+                 filing.date_filed, status or filing.status, filing.date_terminated,
                  now, cluster_id),
             )
