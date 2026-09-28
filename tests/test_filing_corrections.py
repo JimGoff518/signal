@@ -83,3 +83,105 @@ def test_find_class_action_skips_thieme_on_suburban(monkeypatch):
     assert find_class_action(_Fake(), "CHEVROLET", "SUBURBAN", "BRAKES") is None
     hit = find_class_action(_Fake(), "CHEVROLET", "EQUINOX", "BRAKES")
     assert hit is not None and "Thieme" in hit.case_name
+
+
+def test_williams_cvt_allowed_on_equinox_power_train_not_barba_trucks():
+    williams = _filing(
+        "Williams v. General Motors LLC — Malibu Trailblazer Equinox Terrain CVT"
+    )
+    # Intended CVT homes (tracked Equinox + untracked siblings if present).
+    assert allowed_by_corrections(williams, "CHEVROLET", "EQUINOX", "POWER TRAIN")
+    assert allowed_by_corrections(williams, "CHEVROLET", "MALIBU", "POWER TRAIN")
+    assert allowed_by_corrections(williams, "CHEVROLET", "TRAILBLAZER", "POWER TRAIN")
+    assert allowed_by_corrections(williams, "GMC", "TERRAIN", "POWER TRAIN")
+    assert same_defect_override(williams) is True
+    # Barba 8-speed truck/SUV surface — must NOT collapse Williams onto them.
+    assert not allowed_by_corrections(williams, "CHEVROLET", "SILVERADO", "POWER TRAIN")
+    assert not allowed_by_corrections(williams, "CHEVROLET", "SUBURBAN", "POWER TRAIN")
+    assert not allowed_by_corrections(williams, "CHEVROLET", "TAHOE", "POWER TRAIN")
+    assert not allowed_by_corrections(williams, "GMC", "YUKON", "POWER TRAIN")
+    assert not allowed_by_corrections(williams, "GMC", "SIERRA", "POWER TRAIN")
+    # Wrong component.
+    assert not allowed_by_corrections(williams, "CHEVROLET", "EQUINOX", "BRAKES")
+
+
+def test_barba_8speed_rejected_on_williams_cvt_models():
+    barba = _filing("Matthew Barba v. General Motors LLC")
+    assert allowed_by_corrections(barba, "CHEVROLET", "SILVERADO", "POWER TRAIN")
+    assert allowed_by_corrections(barba, "CHEVROLET", "SUBURBAN", "POWER TRAIN")
+    assert allowed_by_corrections(barba, "GMC", "SIERRA", "POWER TRAIN")
+    # Williams CVT models — Barba must not attach here.
+    assert not allowed_by_corrections(barba, "CHEVROLET", "EQUINOX", "POWER TRAIN")
+    assert not allowed_by_corrections(barba, "CHEVROLET", "MALIBU", "POWER TRAIN")
+    assert not allowed_by_corrections(barba, "GMC", "TERRAIN", "POWER TRAIN")
+    assert same_defect_override(barba) is True
+
+
+def test_williams_caption_model_conflict_rejects_suburban():
+    williams = _filing(
+        "Williams v. General Motors LLC (Equinox Malibu Trailblazer Terrain CVT)"
+    )
+    assert model_conflict(williams, "CHEVROLET", "SUBURBAN")
+    assert not model_conflict(williams, "CHEVROLET", "EQUINOX")
+    assert models_named_in_caption(williams.case_name) >= {
+        "EQUINOX",
+        "MALIBU",
+        "TRAILBLAZER",
+        "TERRAIN",
+    }
+
+
+def test_goldenkranz_iccu_allowed_on_ev_electrical_not_ice_hyundais():
+    golden = _filing(
+        "Goldenkranz v. Hyundai Motor America — Ioniq 5 ICCU 12V battery"
+    )
+    assert allowed_by_corrections(golden, "HYUNDAI", "IONIQ 5", "ELECTRICAL")
+    assert allowed_by_corrections(golden, "HYUNDAI", "IONIQ 6", "ELECTRICAL")
+    assert allowed_by_corrections(golden, "KIA", "EV6", "ELECTRICAL")
+    assert allowed_by_corrections(golden, "KIA", "EV9", "ELECTRICAL")
+    assert allowed_by_corrections(golden, "GENESIS", "GV60", "ELECTRICAL")
+    assert same_defect_override(golden) is True
+    # Currently tracked ICE/crossover Hyundais/Kias — must not false-attach.
+    assert not allowed_by_corrections(golden, "HYUNDAI", "TUCSON", "ELECTRICAL")
+    assert not allowed_by_corrections(golden, "HYUNDAI", "SANTA FE", "ELECTRICAL")
+    assert not allowed_by_corrections(golden, "HYUNDAI", "ELANTRA", "ELECTRICAL")
+    assert not allowed_by_corrections(golden, "KIA", "TELLURIDE", "ELECTRICAL")
+    assert not allowed_by_corrections(golden, "KIA", "SORENTO", "ELECTRICAL")
+    assert not allowed_by_corrections(golden, "HYUNDAI", "IONIQ 5", "POWER TRAIN")
+
+
+def test_find_class_action_skips_williams_on_suburban(monkeypatch):
+    class _Fake:
+        def search(self, q, *, limit=5, **_):
+            return [
+                _filing(
+                    "Williams v. General Motors LLC — Malibu Equinox Terrain CVT"
+                )
+            ]
+
+    assert find_class_action(_Fake(), "CHEVROLET", "SUBURBAN", "POWER TRAIN") is None
+    hit = find_class_action(_Fake(), "CHEVROLET", "EQUINOX", "POWER TRAIN")
+    assert hit is not None and "Williams" in hit.case_name
+
+
+def test_find_class_action_skips_goldenkranz_on_tucson(monkeypatch):
+    class _Fake:
+        def search(self, q, *, limit=5, **_):
+            return [
+                _filing(
+                    "Goldenkranz v. Hyundai Motor America (Ioniq 5 ICCU)"
+                )
+            ]
+
+    assert find_class_action(_Fake(), "HYUNDAI", "TUCSON", "ELECTRICAL") is None
+    hit = find_class_action(_Fake(), "HYUNDAI", "IONIQ 5", "ELECTRICAL")
+    assert hit is not None and "Goldenkranz" in hit.case_name
+
+
+def test_thieme_still_ok_after_equinox_sibling_union():
+    """Williams CVT sibling expansion must not break Thieme Equinox BRAKES."""
+    thieme = _filing(
+        "Thieme v. General Motors LLC — Equinox / Terrain / Envision Vacuum Pump"
+    )
+    assert allowed_by_corrections(thieme, "CHEVROLET", "EQUINOX", "BRAKES")
+    assert not allowed_by_corrections(thieme, "CHEVROLET", "SUBURBAN", "BRAKES")
