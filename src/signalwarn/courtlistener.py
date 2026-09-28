@@ -301,12 +301,20 @@ def find_class_action(client: CourtListenerClient, make: str, model: str,
     """Return the best plausible filing for (make, model, component), or None.
 
     Asks for several hits and returns the first that passes
-    `is_plausible_filing`, so a noisy top result does not poison the cluster.
+    `is_plausible_filing` and the curated Scout corrections in
+    `signalwarn.filing_corrections`, so a noisy top result or a known
+    wrong-vehicle / wrong-track caption does not poison the cluster.
     """
+    # Local import avoids a cycle: filing_corrections imports Filing from here.
+    from signalwarn.filing_corrections import allowed_by_corrections
+
     q = build_query(make, model, component)
     if q is None:
         return None
     for filing in client.search(q, limit=5):
-        if is_plausible_filing(filing, make):
-            return filing
+        if not is_plausible_filing(filing, make):
+            continue
+        if not allowed_by_corrections(filing, make, model, component):
+            continue
+        return filing
     return None

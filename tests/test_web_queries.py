@@ -10,7 +10,7 @@ def test_build_filters_defaults_hide_noise_and_filed():
     where, params = queries._build_filters()
     assert "c.classification != 'NOISE'" in where
     assert queries.EXCLUDE_FILED_SQL in where
-    assert "class_action_status" not in where   # status no longer matters: any filing excludes
+    assert not any(w.startswith("c.class_action_status") for w in where)
     assert params == {}
 
 
@@ -22,7 +22,8 @@ def test_exclude_filed_predicate_hides_only_same_defect_matches():
     not black out the cluster. Pending vs terminated still does not matter.
     """
     assert queries.EXCLUDE_FILED_SQL == (
-        "NOT (c.class_action_filed AND c.class_action_same_defect)"
+        "NOT (c.class_action_filed AND c.class_action_same_defect "
+        "AND COALESCE(c.class_action_status, '') <> 'cert_denied')"
     )
 
 

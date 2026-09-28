@@ -42,7 +42,7 @@ def candidates_query(limit: int = 15) -> tuple[str, dict[str, Any]]:
           FROM clusters c
          WHERE c.research_memo IS NULL
            AND c.classification IN ({classes})
-           AND (c.class_action_status IS NULL OR c.class_action_status <> 'terminated')
+           AND (c.class_action_status IS NULL OR c.class_action_status NOT IN ('terminated', 'cert_denied'))
          ORDER BY c.score DESC, c.complaint_count DESC, c.id
          LIMIT %(limit)s
     """

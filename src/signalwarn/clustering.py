@@ -36,7 +36,12 @@ LIVE_COMPLAINT_SQL = (
 # this model) keeps the -30 penalty and shows on the cluster page, but does
 # not black out the cluster: the 2026-09-19 run showed one Grand Cherokee
 # case would otherwise hide seventeen unrelated clusters.
-EXCLUDE_FILED_SQL = "NOT (c.class_action_filed AND c.class_action_same_defect)"
+EXCLUDE_FILED_SQL = (
+    "NOT (c.class_action_filed AND c.class_action_same_defect "
+    "AND COALESCE(c.class_action_status, '') <> 'cert_denied')"
+)
+# cert_denied (e.g. O'Connor 10R80, N.D. Ill. 2026-09-14) stays visible with a status
+# flag so Signal does not treat it as an open cert path, but also does not black it out.
 
 
 def sol_floor(today: date, years: int) -> date:
