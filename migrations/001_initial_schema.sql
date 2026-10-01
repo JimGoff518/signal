@@ -168,3 +168,48 @@ ALTER TABLE clusters
   ADD COLUMN IF NOT EXISTS ewr_incident_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS ewr_death_count    INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS ewr_injury_count   INTEGER NOT NULL DEFAULT 0;
+
+-- Lane B mass-tort schema v1 (added 2026-10-01). Seed lives in
+-- migrations/002_mass_tort_schema_v1.sql and signalwarn.migrations.PENDING.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+DO $$ BEGIN
+  CREATE TYPE mass_tort_human_label AS ENUM ('WATCH', 'INVEST', 'CHASE', 'PASS');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+CREATE TABLE IF NOT EXISTS mass_tort_matters (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug            TEXT UNIQUE NOT NULL,
+  caption         TEXT NOT NULL,
+  parent_slug     TEXT NULL,
+  human_label     mass_tort_human_label NOT NULL,
+  invest_score    INTEGER NULL CHECK (invest_score IS NULL OR (invest_score >= 0 AND invest_score <= 100)),
+  mdl_or_jccp_id  TEXT NULL,
+  court           TEXT NULL,
+  pending_count   INTEGER NULL,
+  last_event_at   TIMESTAMPTZ NULL,
+  last_event_type TEXT NULL,
+  source_urls     JSONB NOT NULL DEFAULT '[]'::jsonb,
+  notes           TEXT NULL,
+  priority_rank   INTEGER NULL,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mass_tort_matters_label
+  ON mass_tort_matters (human_label);
+CREATE INDEX IF NOT EXISTS idx_mass_tort_matters_priority
+  ON mass_tort_matters (priority_rank ASC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_mass_tort_matters_parent
+  ON mass_tort_matters (parent_slug) WHERE parent_slug IS NOT NULL;
+CREATE TABLE IF NOT EXISTS mdl_events (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  matter_id   UUID NOT NULL REFERENCES mass_tort_matters(id) ON DELETE CASCADE,
+  event_type  TEXT NOT NULL,
+  event_date  DATE NULL,
+  cite        TEXT NULL,
+  source_url  TEXT NULL,
+  summary     TEXT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mdl_events_matter
+  ON mdl_events (matter_id, event_date DESC NULLS LAST);
