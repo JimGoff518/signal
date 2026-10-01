@@ -51,7 +51,7 @@
         <span class="font-sans text-zinc-500 font-normal tracking-normal hidden sm:inline">Class action · Product liability</span>
       </a>
       <nav aria-label="Primary" class="flex items-center gap-1 ml-2 md:ml-6">
-        {% for key, href, label in [('clusters', '/', 'Clusters'), ('memos', '/memos', 'Memos')] %}
+        {% for key, href, label in [('clusters', '/', 'Clusters'), ('memos', '/memos', 'Memos'), ('mass-tort', '/mass-tort', 'Mass tort')] %}
           <a href="{{ href }}" {% if active_nav == key %}aria-current="page"{% endif %}
              class="nav-tab {% if active_nav == key %}nav-tab-active{% endif %}">{{ label }}</a>
         {% endfor %}
