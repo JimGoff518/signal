@@ -28,6 +28,7 @@ from signalwarn.config import settings
 from signalwarn.migrations import apply_pending
 from signalwarn.viability import regenerate_memo_if_needed
 from web import charts, queries
+from web.mass_tort_api import router as mass_tort_router
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ app.add_middleware(
     max_age=60 * 60 * 24 * 365,  # 1 year — auth is for competitive protection, not turnover
 )
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT / "static")), name="static")
+app.include_router(mass_tort_router)
 
 
 # ─── Template globals ──────────────────────────────────────────────────
