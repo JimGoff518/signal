@@ -28,6 +28,7 @@ from signalwarn.config import settings
 from signalwarn.migrations import apply_pending
 from signalwarn.viability import regenerate_memo_if_needed
 from web import charts, queries
+from web import mass_tort_queries as mtq
 from web.mass_tort_api import router as mass_tort_router
 
 log = logging.getLogger(__name__)
@@ -121,8 +122,43 @@ CLASSIFICATION_PALETTE: dict[str, dict[str, str]] = {
 }
 CLASSIFICATION_ORDER = ("CRITICAL", "HOT", "WATCH", "MONITOR")
 
+# Lane B human labels (mass tort). Full Tailwind class strings — never
+# concatenated in templates so the content scan of this file emits them.
+# Distinct from NHTSA CLASSIFICATION_PALETTE; invest_score is unrelated.
+MASS_TORT_LABEL_PALETTE: dict[str, dict[str, str]] = {
+    "INVEST": {
+        "text": "text-rose-400", "dot": "bg-rose-400",
+        "badge": "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+    },
+    "CHASE": {
+        "text": "text-orange-400", "dot": "bg-orange-400",
+        "badge": "bg-orange-500/15 text-orange-300 ring-orange-500/30",
+    },
+    "WATCH": {
+        "text": "text-amber-400", "dot": "bg-amber-400",
+        "badge": "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+    },
+    "PASS": {
+        "text": "text-zinc-400", "dot": "bg-zinc-400",
+        "badge": "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
+    },
+}
+MASS_TORT_LABEL_ORDER = ("INVEST", "CHASE", "WATCH", "PASS")
+
+MASS_TORT_EVENT_LABELS: dict[str, str] = {
+    "jpml_motion": "JPML motion",
+    "transfer_order": "Transfer order",
+    "tag_along": "Tag-along",
+    "settlement": "Settlement",
+    "bellwether": "Bellwether",
+    "other": "Other",
+}
+
 templates.env.globals["PALETTE"] = CLASSIFICATION_PALETTE
 templates.env.globals["CLASSIFICATION_ORDER"] = CLASSIFICATION_ORDER
+templates.env.globals["MT_PALETTE"] = MASS_TORT_LABEL_PALETTE
+templates.env.globals["MT_LABEL_ORDER"] = MASS_TORT_LABEL_ORDER
+templates.env.globals["MT_EVENT_LABELS"] = MASS_TORT_EVENT_LABELS
 templates.env.globals["ACTIVITY_WINDOWS"] = queries.ACTIVITY_WINDOWS
 templates.env.globals["SOL_YEARS"] = settings.sol_years
 
@@ -441,6 +477,87 @@ def memos_page(
             "last_page": last_page,
             "page_size": MEMO_PAGE_SIZE,
             **_ticker_ctx(),
+        },
+    )
+
+
+# ─── Mass tort (Lane B, internal) ───────────────────────────────────────
+# List + slide-in drawer. Uses mass_tort_queries only — no NHTSA charts,
+# no Filevine, no Jev. Alerts / Searcher harvest write are later PRs.
+
+
+@app.get("/mass-tort", response_class=HTMLResponse)
+def mass_tort_page(
+    request: Request,
+    user: str = Depends(require_auth),
+    label: str | None = Query(None),
+) -> Response:
+    """Internal Mass Tort tab: INVEST stack on top; filter WATCH / PASS / all."""
+    selected = (label or "ALL").upper()
+    if selected == "ALL":
+        selected = "ALL"
+        filter_label = None
+    elif selected in mtq.HUMAN_LABELS:
+        filter_label = selected
+    else:
+        selected = "ALL"
+        filter_label = None
+
+    try:
+        rows = mtq.list_matters(human_label=filter_label)
+    except ValueError:
+        rows = mtq.list_matters()
+        selected = "ALL"
+
+    # Label counts across the full set (for filter chips), not the filtered slice.
+    all_rows = rows if filter_label is None else mtq.list_matters()
+    label_counts = {k: 0 for k in MASS_TORT_LABEL_ORDER}
+    for r in all_rows:
+        hl = r.get("human_label")
+        if hl in label_counts:
+            label_counts[hl] += 1
+    label_total = sum(label_counts.values())
+
+    matters = mtq.nest_matters_for_display(rows)
+    return templates.TemplateResponse(
+        request,
+        "mass_tort.html",
+        {
+            "title": "SIGNAL — Mass tort",
+            "user": user,
+            "active_nav": "mass-tort",
+            "matters": matters,
+            "total": len(matters),
+            "selected_label": selected,
+            "label_counts": label_counts,
+            "label_total": label_total,
+            **_ticker_ctx(),
+        },
+    )
+
+
+@app.get("/mass-tort/{slug}/panel", response_class=HTMLResponse)
+def mass_tort_panel(
+    request: Request,
+    slug: str,
+    user: str = Depends(require_auth),
+) -> Response:
+    """Slim detail HTML for the Mass Tort slide-in drawer."""
+    row = mtq.get_matter_by_slug(slug)
+    if row is None:
+        raise HTTPException(404, "Matter not found")
+    events = mtq.list_events_for_matter(row["id"])
+    urls = row.get("source_urls") or []
+    if not isinstance(urls, list):
+        urls = list(urls)
+    matter = dict(row)
+    matter["source_urls"] = [str(u) for u in urls]
+    return templates.TemplateResponse(
+        request,
+        "_mass_tort_panel.html",
+        {
+            "matter": matter,
+            "events": events,
         },
     )
 

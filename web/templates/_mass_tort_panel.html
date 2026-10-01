@@ -1,0 +1,135 @@
+{# Mass-tort matter detail as a slide-in drawer. No NHTSA charts. #}
+{% set p = MT_PALETTE.get(matter.human_label, MT_PALETTE['PASS']) %}
+
+<div class="flex flex-col h-full" id="panel-content">
+  <div class="px-5 py-4 border-b border-zinc-800 flex items-start justify-between gap-3 flex-shrink-0">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 font-display text-[11px] font-semibold tracking-wider uppercase {{ p.text }}">
+          <span class="w-1.5 h-1.5 rounded-full {{ p.dot }}" aria-hidden="true"></span>{{ matter.human_label }}
+        </span>
+        {% if matter.mdl_or_jccp_id %}
+          <span class="pill text-zinc-300 ring-zinc-700">{{ matter.mdl_or_jccp_id }}</span>
+        {% endif %}
+        {% if matter.parent_slug %}
+          <span class="pill text-zinc-400 ring-zinc-700" title="Display nesting only — scores are never merged">under {{ matter.parent_slug }}</span>
+        {% endif %}
+      </div>
+      <h2 id="panel-title" class="font-display text-xl font-semibold tracking-tight text-zinc-100">{{ matter.caption }}</h2>
+      {% if matter.court %}
+        <p class="text-sm text-zinc-400 mt-0.5">{{ matter.court }}</p>
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-1 flex-shrink-0">
+      <button type="button" onclick="closePanel()" class="btn-icon" aria-label="Close panel" title="Close (Esc)" data-autofocus>
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+    <div class="grid grid-cols-2 gap-2">
+      <div class="card-inset p-2.5">
+        <div class="eyebrow text-[10px]">Pending</div>
+        <div class="text-lg font-semibold mt-0.5 {% if matter.pending_count %}text-zinc-100{% else %}text-zinc-500{% endif %}">
+          {% if matter.pending_count is not none %}{{ "{:,}".format(matter.pending_count) }}{% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="card-inset p-2.5">
+        <div class="eyebrow text-[10px]">Invest score</div>
+        <div class="text-lg font-semibold mt-0.5 {% if matter.invest_score is not none %}text-zinc-100{% else %}text-zinc-500{% endif %}">
+          {% if matter.invest_score is not none %}{{ matter.invest_score }}{% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="card-inset p-2.5 col-span-2">
+        <div class="eyebrow text-[10px]">Last event</div>
+        {% if matter.last_event_type or matter.last_event_at %}
+          <div class="text-sm text-zinc-200 mt-0.5">{{ MT_EVENT_LABELS.get(matter.last_event_type, matter.last_event_type or '—') }}</div>
+          {% if matter.last_event_at %}
+            <div class="text-xs text-zinc-500 num mt-0.5">{{ matter.last_event_at.strftime("%b") }} {{ matter.last_event_at.day }}, {{ matter.last_event_at.year }}</div>
+          {% endif %}
+        {% else %}
+          <div class="text-sm text-zinc-500 mt-0.5">—</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card-inset p-3">
+      <div class="flex items-end justify-between gap-3 flex-wrap mb-1.5">
+        <label for="mt-label-select" class="eyebrow text-[10px]">Human label</label>
+        <span id="label-patch-status" class="text-xs text-zinc-500" aria-live="polite"></span>
+      </div>
+      <select id="mt-label-select" class="field" data-slug="{{ matter.slug }}"
+              onchange="patchMatterLabel(this)" aria-label="Update human label">
+        {% for key in MT_LABEL_ORDER %}
+          <option value="{{ key }}" {% if matter.human_label == key %}selected{% endif %}>{{ key }}</option>
+        {% endfor %}
+      </select>
+      <p class="text-[11px] text-zinc-600 mt-1.5">Labels are the source of truth. Score stays blank until Jimmy sets one.</p>
+    </div>
+
+    {% if matter.mdl_or_jccp_id or matter.court %}
+    <div class="card-inset p-3 text-sm space-y-1.5">
+      <div class="flex justify-between gap-3">
+        <span class="text-zinc-500 text-xs">Cite</span>
+        <span class="num text-zinc-200">{{ matter.mdl_or_jccp_id or '—' }}</span>
+      </div>
+      <div class="flex justify-between gap-3">
+        <span class="text-zinc-500 text-xs">Court</span>
+        <span class="text-zinc-200 text-right">{{ matter.court or '—' }}</span>
+      </div>
+      <div class="flex justify-between gap-3">
+        <span class="text-zinc-500 text-xs">Slug</span>
+        <span class="num text-zinc-400 text-xs">{{ matter.slug }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if matter.source_urls %}
+    <div class="card-inset p-3">
+      <div class="eyebrow text-[10px] mb-2">Source links</div>
+      <ul class="space-y-1.5 text-sm">
+        {% for url in matter.source_urls %}
+        <li>
+          <a href="{{ url }}" target="_blank" rel="noopener"
+             class="text-zinc-300 hover:text-zinc-100 underline underline-offset-2 break-all rounded">{{ url }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if matter.notes %}
+    <div class="card-inset p-3">
+      <div class="eyebrow text-[10px] mb-2">Notes</div>
+      <div class="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{{ matter.notes }}</div>
+    </div>
+    {% endif %}
+
+    <div class="card-inset p-3">
+      <div class="eyebrow text-[10px] mb-2">Event timeline</div>
+      {% if events %}
+      <ol class="space-y-3">
+        {% for ev in events %}
+        <li class="border-l border-zinc-800 pl-3">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <span class="text-sm text-zinc-200">{{ MT_EVENT_LABELS.get(ev.event_type, ev.event_type) }}</span>
+            {% if ev.event_date %}
+              <span class="text-xs text-zinc-500 num">{{ ev.event_date.strftime("%b") }} {{ ev.event_date.day }}, {{ ev.event_date.year }}</span>
+            {% endif %}
+          </div>
+          {% if ev.cite %}<div class="text-xs text-zinc-400 num mt-0.5">{{ ev.cite }}</div>{% endif %}
+          {% if ev.summary %}<div class="text-xs text-zinc-400 mt-0.5">{{ ev.summary }}</div>{% endif %}
+          {% if ev.source_url %}
+            <a href="{{ ev.source_url }}" target="_blank" rel="noopener"
+               class="inline-block text-xs text-zinc-500 hover:text-zinc-200 underline underline-offset-2 mt-0.5 rounded">Source ↗</a>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="text-sm text-zinc-500">No events yet. Searcher harvest (PR4) will write here.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>

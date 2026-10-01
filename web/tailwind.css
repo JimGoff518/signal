@@ -117,8 +117,8 @@
   .meter > i.on { background: currentColor; box-shadow: 0 0 6px -1px currentColor; }
 
   /* ── Table rows ────────────────────────────────────────────────────── */
-  .cluster-row { content-visibility: auto; contain-intrinsic-size: 0 56px; }
-  .cluster-row:hover { background: rgba(255, 255, 255, 0.03); }
+  .cluster-row, .matter-row { content-visibility: auto; contain-intrinsic-size: 0 56px; }
+  .cluster-row:hover, .matter-row:hover { background: rgba(255, 255, 255, 0.03); }
   .row-selected { background: rgba(255, 255, 255, 0.05) !important; box-shadow: inset 2px 0 0 0 theme("colors.signal.DEFAULT"); }
   .row-actions { opacity: 0; transition: opacity 150ms; }
   tr:hover .row-actions, tr:focus-within .row-actions, .row-selected .row-actions { opacity: 1; }

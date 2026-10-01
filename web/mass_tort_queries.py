@@ -118,3 +118,30 @@ def patch_matter(slug: str, fields: dict[str, Any]) -> dict[str, Any] | None:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             return cur.fetchone()
+
+
+def nest_matters_for_display(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Display nesting only: children follow parent with nest_depth=1.
+
+    Does not merge scores or rewrite human_label / invest_score. Children whose
+    parent is absent from `rows` stay at depth 0 (orphan after a label filter).
+    """
+    by_slug = {r["slug"]: r for r in rows}
+    children: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        parent = r.get("parent_slug")
+        if parent and parent in by_slug:
+            children.setdefault(parent, []).append(r)
+    nested_child_slugs = {c["slug"] for cs in children.values() for c in cs}
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if r["slug"] in nested_child_slugs:
+            continue
+        item = dict(r)
+        item["nest_depth"] = 0
+        out.append(item)
+        for c in children.get(r["slug"], []):
+            child = dict(c)
+            child["nest_depth"] = 1
+            out.append(child)
+    return out

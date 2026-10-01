@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-end justify-between mb-5 flex-wrap gap-3">
+  <div>
+    <h1 class="font-display text-2xl md:text-3xl font-semibold tracking-tight">Mass tort</h1>
+    <p class="text-sm text-zinc-500 mt-1">Internal Lane B board — what’s forming, and whether to spend time. Labels are the source of truth.</p>
+  </div>
+  <span class="pill text-zinc-400 ring-zinc-700">Internal only</span>
+</div>
+
+<!-- Label filters: INVEST on top by default sort; toggle WATCH / PASS / all. -->
+<div class="flex items-center gap-2 mb-4 flex-wrap" role="group" aria-label="Filter by label">
+  <a href="/mass-tort"
+     class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm border transition-colors duration-150
+            {% if selected_label == 'ALL' %}border-zinc-600 bg-zinc-900 text-zinc-100{% else %}border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700{% endif %}">
+    All
+    <span class="num text-zinc-500">{{ label_total }}</span>
+  </a>
+  {% for key in MT_LABEL_ORDER %}
+    {% set p = MT_PALETTE[key] %}
+    <a href="/mass-tort?label={{ key }}"
+       class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm border transition-colors duration-150
+              {% if selected_label == key %}border-zinc-600 bg-zinc-900 text-zinc-100{% else %}border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700{% endif %}">
+      <span class="w-1.5 h-1.5 rounded-full {{ p.dot }}" aria-hidden="true"></span>
+      {{ key }}
+      <span class="num text-zinc-500">{{ label_counts.get(key, 0) }}</span>
+    </a>
+  {% endfor %}
+</div>
+
+<div id="layout" class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+<div id="table-col" class="xl:col-span-12 card overflow-hidden">
+  <div class="px-4 py-2.5 border-b border-zinc-800 text-xs text-zinc-500 flex items-center justify-between gap-3 flex-wrap">
+    <span role="status" aria-live="polite">
+      <span class="num text-zinc-300 font-medium">{{ "{:,}".format(total) }}</span>
+      matter{{ '' if total == 1 else 's' }}
+      {% if selected_label != 'ALL' %}· <span class="text-zinc-300">{{ selected_label }}</span>{% endif %}
+      · INVEST first, then priority
+    </span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <caption class="sr-only">Mass tort matters. Select a row to open its detail drawer.</caption>
+      <thead class="text-[11px] font-display text-zinc-500 uppercase tracking-wider bg-zinc-950/40">
+        <tr>
+          <th scope="col" class="text-left px-4 py-2.5 font-medium">Label</th>
+          <th scope="col" class="text-left px-4 py-2.5 font-medium">Caption</th>
+          <th scope="col" class="text-left px-4 py-2.5 font-medium hidden md:table-cell">MDL / JCCP</th>
+          <th scope="col" class="text-right px-4 py-2.5 font-medium hidden md:table-cell">Pending</th>
+          <th scope="col" class="text-left px-4 py-2.5 font-medium hidden lg:table-cell">Last event</th>
+          <th scope="col" class="text-right px-4 py-2.5 font-medium hidden lg:table-cell">Updated</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-zinc-800/60">
+        {% for m in matters %}
+        {% set p = MT_PALETTE.get(m.human_label, MT_PALETTE['PASS']) %}
+        <tr data-matter-slug="{{ m.slug }}" class="matter-row transition-colors duration-150 cursor-pointer"
+            style="--row: {{ loop.index0 }}"
+            onclick="openMatterPanel('{{ m.slug }}')">
+          <td class="px-4 py-3 align-middle">
+            <span class="inline-flex items-center gap-1.5 font-display text-[11px] font-semibold tracking-wide uppercase {{ p.text }}">
+              <span class="w-1.5 h-1.5 rounded-full {{ p.dot }}" aria-hidden="true"></span>
+              {{ m.human_label }}
+            </span>
+          </td>
+          <td class="px-4 py-3 align-middle {% if m.nest_depth %}pl-10{% endif %}">
+            <a href="/mass-tort?{% if selected_label != 'ALL' %}label={{ selected_label }}&{% endif %}focus={{ m.slug }}"
+               class="row-link font-medium text-zinc-100 hover:text-white rounded"
+               onclick="event.preventDefault(); event.stopPropagation(); openMatterPanel('{{ m.slug }}', this)">
+              {% if m.nest_depth %}<span class="text-zinc-600 mr-1.5" aria-hidden="true">↳</span>{% endif %}
+              {{ m.caption }}
+            </a>
+            {% if m.parent_slug and m.nest_depth %}
+              <div class="text-xs text-zinc-600 mt-0.5">under {{ m.parent_slug }}</div>
+            {% endif %}
+            {% if m.invest_score is not none %}
+              <div class="text-xs text-zinc-500 mt-0.5 num">Score {{ m.invest_score }}</div>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 align-middle text-zinc-300 num text-xs hidden md:table-cell">
+            {{ m.mdl_or_jccp_id or '—' }}
+          </td>
+          <td class="px-4 py-3 align-middle text-right num hidden md:table-cell {% if m.pending_count %}text-zinc-100{% else %}text-zinc-600{% endif %}">
+            {% if m.pending_count is not none %}{{ "{:,}".format(m.pending_count) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3 align-middle text-xs hidden lg:table-cell">
+            {% if m.last_event_type or m.last_event_at %}
+              <div class="text-zinc-300">{{ MT_EVENT_LABELS.get(m.last_event_type, m.last_event_type or '—') }}</div>
+              {% if m.last_event_at %}
+                <div class="text-zinc-500 num mt-0.5">{{ m.last_event_at.strftime("%b") }} {{ m.last_event_at.day }}, {{ m.last_event_at.year }}</div>
+              {% endif %}
+            {% else %}
+              <span class="text-zinc-600">—</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 align-middle text-right text-xs text-zinc-500 num hidden lg:table-cell">
+            {% if m.updated_at %}
+              {{ m.updated_at.strftime("%b") }} {{ m.updated_at.day }}
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="px-4 py-12 text-center text-zinc-500">
+            No matters in this filter.
+            <a href="/mass-tort" class="text-zinc-200 underline underline-offset-4 rounded ml-1">Show all</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<aside id="panel" role="dialog" aria-labelledby="panel-title" tabindex="-1"
+       class="hidden xl:col-span-5 card shadow-panel overflow-hidden xl:sticky xl:top-24 xl:max-h-[calc(100vh-7.5rem)]"
+       hx-target="this" hx-swap="innerHTML">
+  <div class="p-8 text-center text-zinc-500" aria-busy="true">Loading…</div>
+</aside>
+</div>
+
+<div class="hidden md:flex text-[11px] text-zinc-500 mt-3 items-center gap-3 flex-wrap">
+  <span><kbd class="kbd">j</kbd> / <kbd class="kbd">k</kbd> move</span>
+  <span><kbd class="kbd">Enter</kbd> open</span>
+  <span><kbd class="kbd">Esc</kbd> close</span>
+</div>
+
+<script>
+(function() {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tableCol = document.getElementById('table-col');
+  const panel = document.getElementById('panel');
+  const rows = Array.from(document.querySelectorAll('.matter-row'));
+  let selected = -1;
+  let panelOpen = false;
+  let returnFocusTo = null;
+
+  function setSelected(idx, scroll) {
+    if (selected >= 0 && rows[selected]) rows[selected].classList.remove('row-selected');
+    selected = Math.max(0, Math.min(rows.length - 1, idx));
+    if (rows[selected]) {
+      rows[selected].classList.add('row-selected');
+      if (scroll) rows[selected].scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+    }
+  }
+
+  function isDesktop() { return window.matchMedia('(min-width: 1280px)').matches; }
+
+  function focusQs(slug) {
+    const params = new URLSearchParams(window.location.search);
+    if (slug) params.set('focus', slug); else params.delete('focus');
+    const q = params.toString();
+    return window.location.pathname + (q ? '?' + q : '');
+  }
+
+  window.openMatterPanel = function(slug, trigger) {
+    const idx = rows.findIndex(r => r.dataset.matterSlug === slug);
+    if (idx >= 0) setSelected(idx, false);
+    returnFocusTo = trigger || (idx >= 0 ? rows[idx].querySelector('.row-link') : null) || document.activeElement;
+    panel.classList.remove('hidden');
+    tableCol.classList.remove('xl:col-span-12');
+    tableCol.classList.add('xl:col-span-7');
+    panelOpen = true;
+    const mobile = !isDesktop();
+    panel.setAttribute('aria-modal', mobile ? 'true' : 'false');
+    if (mobile) document.body.classList.add('panel-open-mobile');
+    requestAnimationFrame(() => panel.classList.add('panel-open'));
+    htmx.ajax('GET', '/mass-tort/' + encodeURIComponent(slug) + '/panel', { target: panel, swap: 'innerHTML' });
+    history.replaceState({}, '', focusQs(slug));
+  };
+
+  window.closePanel = function() {
+    panel.classList.remove('panel-open');
+    tableCol.classList.remove('xl:col-span-7');
+    tableCol.classList.add('xl:col-span-12');
+    panelOpen = false;
+    document.body.classList.remove('panel-open-mobile');
+    setTimeout(() => panel.classList.add('hidden'), reduceMotion ? 0 : 250);
+    history.replaceState({}, '', focusQs(null));
+    if (returnFocusTo && typeof returnFocusTo.focus === 'function') returnFocusTo.focus();
+  };
+
+  window.patchMatterLabel = async function(sel) {
+    const slug = sel.dataset.slug;
+    const status = document.getElementById('label-patch-status');
+    if (status) { status.textContent = 'Saving…'; status.className = 'text-xs text-zinc-500'; }
+    try {
+      const r = await fetch('/api/mass-tort/matters/' + encodeURIComponent(slug), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ human_label: sel.value }),
+      });
+      if (!r.ok) {
+        const detail = await r.text();
+        if (status) { status.textContent = 'Save failed'; status.className = 'text-xs text-rose-400'; }
+        console.warn('label patch failed', r.status, detail);
+        return;
+      }
+      if (status) { status.textContent = 'Saved'; status.className = 'text-xs text-emerald-400'; }
+      htmx.ajax('GET', '/mass-tort/' + encodeURIComponent(slug) + '/panel', { target: panel, swap: 'innerHTML' });
+      // Refresh list so label column + INVEST sort stay honest.
+      const params = new URLSearchParams(window.location.search);
+      params.set('focus', slug);
+      window.location.search = params.toString();
+    } catch (err) {
+      if (status) { status.textContent = 'Save failed'; status.className = 'text-xs text-rose-400'; }
+      console.warn(err);
+    }
+  };
+
+  document.body.addEventListener('htmx:afterSwap', function(e) {
+    if (e.target === panel) {
+      const first = panel.querySelector('[data-autofocus]');
+      if (first) first.focus({ preventScroll: true }); else panel.focus({ preventScroll: true });
+    }
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.key === 'j') { e.preventDefault(); setSelected(selected < 0 ? 0 : selected + 1, true); }
+    else if (e.key === 'k') { e.preventDefault(); setSelected(selected < 0 ? 0 : selected - 1, true); }
+    else if (e.key === 'Enter' && selected >= 0) { e.preventDefault(); openMatterPanel(rows[selected].dataset.matterSlug); }
+    else if (e.key === 'Escape' && panelOpen) { e.preventDefault(); closePanel(); }
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  const focus = params.get('focus');
+  if (focus) setTimeout(() => openMatterPanel(focus), 50);
+})();
+</script>
+{% endblock %}
