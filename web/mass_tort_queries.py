@@ -120,6 +120,129 @@ def patch_matter(slug: str, fields: dict[str, Any]) -> dict[str, Any] | None:
             return cur.fetchone()
 
 
+# Searcher weekly harvest may touch these. human_label / invest_score / priority_rank
+# stay Jimmy-only (PATCH). parent_slug / caption / slug are seed-locked.
+HARVESTABLE_FIELDS = frozenset({
+    "mdl_or_jccp_id",
+    "court",
+    "pending_count",
+    "last_event_at",
+    "last_event_type",
+    "source_urls",
+    "notes",
+})
+
+EVENT_TYPES = frozenset({
+    "jpml_motion",
+    "transfer_order",
+    "tag_along",
+    "settlement",
+    "bellwether",
+    "other",
+})
+
+
+def apply_harvest_write(
+    slug: str,
+    fields: dict[str, Any],
+    *,
+    event: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Write Searcher harvest fields by slug; optionally append one mdl_event.
+
+    Does not write human_label, invest_score, priority_rank, caption, or
+    parent_slug. Returns the updated matter row, or None if slug missing.
+    Raises ValueError on empty / invalid input.
+    """
+    if not fields and not event:
+        raise ValueError("no harvest fields provided")
+    unknown = set(fields) - HARVESTABLE_FIELDS
+    if unknown:
+        raise ValueError(f"unharvestable fields: {sorted(unknown)}")
+    if "last_event_type" in fields and fields["last_event_type"] is not None:
+        if fields["last_event_type"] not in EVENT_TYPES:
+            raise ValueError(f"invalid last_event_type: {fields['last_event_type']}")
+    if event is not None:
+        et = event.get("event_type")
+        if not et or et not in EVENT_TYPES:
+            raise ValueError(f"invalid event_type: {et}")
+
+    with connection() as conn:
+        with conn.cursor() as cur:
+            if fields:
+                sets: list[str] = []
+                params: dict[str, Any] = {"slug": slug}
+                for key, value in fields.items():
+                    sets.append(f"{key} = %({key})s")
+                    params[key] = value
+                sets.append("updated_at = NOW()")
+                cur.execute(
+                    f"""
+                    UPDATE mass_tort_matters
+                       SET {", ".join(sets)}
+                     WHERE slug = %(slug)s
+                 RETURNING {MATTER_COLUMNS}
+                    """,
+                    params,
+                )
+                row = cur.fetchone()
+            else:
+                cur.execute(
+                    f"""
+                    SELECT {MATTER_COLUMNS}
+                      FROM mass_tort_matters
+                     WHERE slug = %(slug)s
+                    """,
+                    {"slug": slug},
+                )
+                row = cur.fetchone()
+            if row is None:
+                return None
+
+            if event is not None:
+                # Sync last_event_* from the appended event when caller omitted them.
+                sync: dict[str, Any] = {}
+                if "last_event_type" not in fields:
+                    sync["last_event_type"] = event["event_type"]
+                if "last_event_at" not in fields and event.get("event_date") is not None:
+                    sync["last_event_at"] = event["event_date"]
+                cur.execute(
+                    """
+                    INSERT INTO mdl_events (
+                        matter_id, event_type, event_date, cite, source_url, summary
+                    ) VALUES (
+                        %(matter_id)s, %(event_type)s, %(event_date)s,
+                        %(cite)s, %(source_url)s, %(summary)s
+                    )
+                    RETURNING id
+                    """,
+                    {
+                        "matter_id": row["id"],
+                        "event_type": event["event_type"],
+                        "event_date": event.get("event_date"),
+                        "cite": event.get("cite"),
+                        "source_url": event.get("source_url"),
+                        "summary": event.get("summary"),
+                    },
+                )
+                cur.fetchone()
+                if sync:
+                    sync_sets = [f"{k} = %({k})s" for k in sync]
+                    sync_sets.append("updated_at = NOW()")
+                    sync["slug"] = slug
+                    cur.execute(
+                        f"""
+                        UPDATE mass_tort_matters
+                           SET {", ".join(sync_sets)}
+                         WHERE slug = %(slug)s
+                     RETURNING {MATTER_COLUMNS}
+                        """,
+                        sync,
+                    )
+                    row = cur.fetchone() or row
+            return row
+
+
 def nest_matters_for_display(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Display nesting only: children follow parent with nest_depth=1.
 
