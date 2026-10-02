@@ -483,7 +483,7 @@ def memos_page(
 
 # ─── Mass tort (Lane B, internal) ───────────────────────────────────────
 # List + slide-in drawer. Uses mass_tort_queries only — no NHTSA charts,
-# no Filevine, no Jev. Alerts / Searcher harvest write are later PRs.
+# no Filevine, no Jev. Alerts are a later PR; Searcher harvest write is PUT /api/mass-tort/matters/{slug}/harvest.
 
 
 @app.get("/mass-tort", response_class=HTMLResponse)

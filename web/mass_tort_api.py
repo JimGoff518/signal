@@ -1,7 +1,7 @@
 """Lane B mass-tort JSON API under /api/mass-tort/.
 
-PR2 only — list, detail + events, human-label PATCH. No UI tab (PR3).
-No Searcher write (PR4). No Filevine. No Jev on score/labels.
+List, detail + events, human-label PATCH, Searcher harvest write.
+No Filevine. No Jev on score/labels. Alerts are a later slice.
 Never joins Lane A digests or ads flags.
 """
 from __future__ import annotations
@@ -155,3 +155,51 @@ def patch_matter(
     if row is None:
         raise HTTPException(status_code=404, detail="matter not found")
     return _matter_out(row)
+
+class HarvestEventIn(BaseModel):
+    """One mdl_events row to append during a harvest write."""
+
+    event_type: str
+    event_date: date | None = None
+    cite: str | None = None
+    source_url: str | None = None
+    summary: str | None = None
+
+
+class MatterHarvestWrite(BaseModel):
+    """Searcher weekly fields. human_label / invest_score are not accepted."""
+
+    mdl_or_jccp_id: str | None = None
+    court: str | None = None
+    pending_count: int | None = None
+    last_event_at: datetime | None = None
+    last_event_type: str | None = None
+    source_urls: list[str] | None = None
+    notes: str | None = None
+    event: HarvestEventIn | None = None
+
+
+@router.put("/matters/{slug}/harvest", response_model=MatterDetailOut)
+def put_matter_harvest(
+    slug: str,
+    body: MatterHarvestWrite,
+    _user: str = Depends(require_api_auth),
+) -> MatterDetailOut:
+    """Searcher harvest write by slug. Auth required. Never writes score/labels."""
+    payload = body.model_dump(exclude_unset=True)
+    event_raw = payload.pop("event", None)
+    # Strip explicit Nones left in nested dump when event was set
+    fields = {k: v for k, v in payload.items() if k != "event"}
+    try:
+        row = mtq.apply_harvest_write(slug, fields, event=event_raw)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if row is None:
+        raise HTTPException(status_code=404, detail="matter not found")
+    events = mtq.list_events_for_matter(row["id"])
+    base = _matter_out(row)
+    return MatterDetailOut(
+        **base.model_dump(),
+        events=[MdlEventOut.model_validate(ev) for ev in events],
+    )
+

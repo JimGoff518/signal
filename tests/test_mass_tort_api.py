@@ -11,7 +11,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql://x:x@localhost:5432/x")
 
 from tests._fakes import FakeConn, fake_connection
 from web import mass_tort_queries as mtq
-from web.mass_tort_api import HumanLabel, MatterPatch, require_api_auth
+from web.mass_tort_api import HumanLabel, MatterHarvestWrite, MatterPatch, require_api_auth
 
 
 def test_list_order_sql_invest_first_then_priority_then_caption():
@@ -138,3 +138,113 @@ def test_api_routes_registered_and_patch_requires_auth():
     assert slug_paths
     assert "GET" in methods_by_path[slug_paths[0]]
     assert "PATCH" in methods_by_path[slug_paths[0]]
+    harvest_paths = [p for p in methods_by_path if p.endswith("/matters/{slug}/harvest")]
+    assert harvest_paths
+    assert "PUT" in methods_by_path[harvest_paths[0]]
+    assert client.put(
+        "/api/mass-tort/matters/galaxy-gas/harvest",
+        json={"pending_count": 1},
+    ).status_code == 401
+
+
+def test_apply_harvest_write_updates_fields_not_label(monkeypatch):
+    matter_id = uuid4()
+    updated = {
+        "id": matter_id,
+        "slug": "glp1-gi",
+        "caption": "GLP-1 GI / gastroparesis",
+        "parent_slug": None,
+        "human_label": "INVEST",
+        "invest_score": None,
+        "mdl_or_jccp_id": "MDL-3094",
+        "court": "E.D. Pa.",
+        "pending_count": 4100,
+        "last_event_at": datetime.now(timezone.utc),
+        "last_event_type": "other",
+        "source_urls": ["https://example.com/a"],
+        "notes": "WoW bump",
+        "priority_rank": 6,
+        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(timezone.utc),
+    }
+    conn = FakeConn([updated])
+    monkeypatch.setattr(mtq, "connection", fake_connection(conn))
+    out = mtq.apply_harvest_write(
+        "glp1-gi",
+        {
+            "pending_count": 4100,
+            "last_event_type": "other",
+            "source_urls": ["https://example.com/a"],
+            "notes": "WoW bump",
+        },
+    )
+    assert out["pending_count"] == 4100
+    assert out["human_label"] == "INVEST"
+    sql, params = conn.cur.calls[0]
+    set_clause = sql.split("RETURNING", 1)[0]
+    assert "pending_count = %(pending_count)s" in set_clause
+    assert "human_label" not in set_clause
+    assert "invest_score" not in set_clause
+    assert "priority_rank" not in set_clause
+    assert params["slug"] == "glp1-gi"
+
+
+def test_apply_harvest_rejects_label_and_score():
+    with pytest.raises(ValueError, match="unharvestable"):
+        mtq.apply_harvest_write("x", {"human_label": "PASS"})
+    with pytest.raises(ValueError, match="unharvestable"):
+        mtq.apply_harvest_write("x", {"invest_score": 50})
+    with pytest.raises(ValueError, match="no harvest fields"):
+        mtq.apply_harvest_write("x", {})
+
+
+def test_apply_harvest_appends_event(monkeypatch):
+    matter_id = uuid4()
+    base = {
+        "id": matter_id,
+        "slug": "roblox",
+        "caption": "Roblox",
+        "parent_slug": None,
+        "human_label": "INVEST",
+        "invest_score": None,
+        "mdl_or_jccp_id": "MDL-3166",
+        "court": "N.D. Cal.",
+        "pending_count": 182,
+        "last_event_at": None,
+        "last_event_type": None,
+        "source_urls": [],
+        "notes": None,
+        "priority_rank": 4,
+        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(timezone.utc),
+    }
+    synced = dict(base)
+    synced["last_event_type"] = "transfer_order"
+    # UPDATE matter, INSERT event, sync UPDATE matter
+    conn = FakeConn([base, {"id": uuid4()}, synced])
+    monkeypatch.setattr(mtq, "connection", fake_connection(conn))
+    out = mtq.apply_harvest_write(
+        "roblox",
+        {"pending_count": 182},
+        event={
+            "event_type": "transfer_order",
+            "event_date": None,
+            "cite": "MDL-3166",
+            "source_url": "https://example.com/order",
+            "summary": "transfer order on free sources",
+        },
+    )
+    assert out["last_event_type"] == "transfer_order"
+    assert len(conn.cur.calls) == 3
+    assert "INSERT INTO mdl_events" in conn.cur.calls[1][0]
+    set_clause = conn.cur.calls[0][0].split("RETURNING", 1)[0]
+    assert "human_label" not in set_clause
+    assert "invest_score" not in set_clause
+
+
+def test_matter_harvest_model_excludes_label_score():
+    body = MatterHarvestWrite(pending_count=10, notes="n")
+    dumped = body.model_dump(exclude_unset=True)
+    assert "human_label" not in dumped
+    assert "invest_score" not in dumped
+    assert dumped["pending_count"] == 10
