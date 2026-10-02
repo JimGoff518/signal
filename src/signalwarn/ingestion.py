@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from signalwarn.clustering import recalculate_cluster, upsert_clusters_for_complaint
 from signalwarn.config import settings
 from signalwarn.db import connection
+from signalwarn.lane_a_window import is_eligible_lane_a_filed_date
 from signalwarn.nhtsa import Complaint, NHTSAClient
 from signalwarn.normalize import normalize_component
 
@@ -128,6 +129,11 @@ def run_daily_ingestion(lookback_days: int | None = None) -> IngestionResult:
                         continue
 
                     for complaint in complaints:
+                        # Lane A filed-date gate (2026-10-01 lock): reject any
+                        # complaint filed before calendar year 2026 (or undated).
+                        if not is_eligible_lane_a_filed_date(complaint.date_complaint_filed):
+                            result.skipped += 1
+                            continue
                         component = normalize_component(complaint.component_raw)
                         new_id = _insert_complaint(conn, complaint)
                         if new_id is None:

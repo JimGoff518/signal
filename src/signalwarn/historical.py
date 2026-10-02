@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import urllib.request
-from datetime import date
 from pathlib import Path
 
 from signalwarn.clustering import recalculate_cluster, upsert_clusters_for_complaint
@@ -21,6 +20,7 @@ from signalwarn.flatfile import (
     iter_recalls,
 )
 from signalwarn.ingestion import TRACKED_VEHICLES
+from signalwarn.lane_a_window import LANE_A_MIN_FILED_DATE, is_eligible_lane_a_filed_date
 from signalwarn.normalize import normalize_component
 
 log = logging.getLogger(__name__)
@@ -28,7 +28,9 @@ log = logging.getLogger(__name__)
 CMPL_URL = "https://static.nhtsa.gov/odi/ffdd/cmpl/FLAT_CMPL.zip"
 RCL_URL = "https://static.nhtsa.gov/odi/ffdd/rcl/FLAT_RCL_POST_2010.zip"
 INV_URL = "https://static.nhtsa.gov/odi/ffdd/inv/FLAT_INV.zip"
-EARLIEST_YEAR = 2015  # spec §4.4: load 2015–present
+# Lane A filed-date floor (2026-10-01 lock). Model-year range is unchanged
+# in TRACKED_VEHICLES / MODEL_YEARS; this only gates complaint *filed* date.
+EARLIEST_FILED_DATE = LANE_A_MIN_FILED_DATE
 INSERT_BATCH = 5000
 
 
@@ -78,7 +80,6 @@ def download_investigations_flat_file(dest: Path) -> Path:
 def import_complaints(complaints_path: Path) -> tuple[int, int]:
     """Bulk-load filtered complaints. Returns (inserted, skipped)."""
     tracked = _tracked_makes_and_models()
-    floor = date(EARLIEST_YEAR, 1, 1)
 
     inserted = skipped = 0
     batch: list[tuple] = []
@@ -90,7 +91,7 @@ def import_complaints(complaints_path: Path) -> tuple[int, int]:
             if not _is_tracked(tracked, c.make, c.model):
                 skipped += 1
                 continue
-            if c.date_complaint_filed is None or c.date_complaint_filed < floor:
+            if not is_eligible_lane_a_filed_date(c.date_complaint_filed):
                 skipped += 1
                 continue
             component = normalize_component(c.component_raw)
