@@ -60,6 +60,16 @@ def _cluster(**over):
         sparkline_max=4,
     )
     base.update(over)
+    if "year_label" not in over:
+        if base.get("model_year") is not None:
+            base["year_label"] = str(base["model_year"])
+        elif base.get("year_min") is not None and base.get("year_max") is not None:
+            ymin, ymax = base["year_min"], base["year_max"]
+            base["year_label"] = str(ymin) if ymin == ymax else f"{ymin}–{ymax}"
+        else:
+            base.setdefault("year_min", None)
+            base.setdefault("year_max", None)
+            base["year_label"] = "Multi-year"
     return base
 
 
@@ -80,6 +90,8 @@ def _dashboard_ctx(**over):
                 score=100,
                 model_year=None,
                 is_multi_year=True,
+                year_min=2015,
+                year_max=2024,
                 has_memo=False,
                 class_action_filed=False,
             ),
@@ -459,3 +471,83 @@ def test_login_plays_intro_once_then_dashboard_owns_the_session():
 
     r = client.get("/intro")
     assert r.status_code == 200 and 'class="brand"' in r.text
+
+
+def test_all_years_vehicle_label_uses_year_span(chart_ctx):
+    """ALL_YEARS rollups show min–max (or Multi-year), never the literal 'All years'."""
+    span = _cluster(model_year=None, is_multi_year=True, year_min=2015, year_max=2024)
+    single = _cluster(
+        id=9, model_year=None, is_multi_year=True, year_min=2019, year_max=2019
+    )
+    fallback = _cluster(
+        id=10, model_year=None, is_multi_year=True, year_min=None, year_max=None
+    )
+
+    dash = _render(
+        "dashboard.html",
+        **_dashboard_ctx(clusters=[span, single, fallback], total=3, **chart_ctx),
+    )
+    assert '<option value="">All years</option>' in dash
+    body = dash.replace('<option value="">All years</option>', "")
+    assert "All years" not in body
+    assert "2015–2024" in dash
+    assert "Multi-year" in dash
+
+    panel = _render(
+        "_panel.html",
+        cluster=span,
+        complaints=[],
+        states=[],
+        volume=[],
+        total_complaints=0,
+    )
+    assert "2015–2024 · Ford F-150" in panel
+    assert "All years" not in panel
+
+    cluster_page = _render(
+        "cluster.html",
+        title="x",
+        user="jim",
+        cluster=span,
+        complaints=[],
+        states=[],
+        volume=[],
+        page=1,
+        last_page=1,
+        total_complaints=0,
+        ticker=None,
+    )
+    assert "2015–2024 · Ford F-150" in cluster_page
+
+    search = _render("_search_results.html", q="ford", results=[span, fallback])
+    assert "2015–2024" in search and "Multi-year" in search
+    assert "All years" not in search
+
+    memo_row = {
+        **span,
+        "new_since_memo": 0,
+        "memo_complaint_count_at_gen": 100,
+        "viability_memo": "Short.",
+        "research_memo": None,
+    }
+    memos = _render(
+        "memos.html",
+        title="x",
+        user="jim",
+        active_nav="memos",
+        memos=[memo_row],
+        total=1,
+        q="",
+        page=1,
+        last_page=1,
+        page_size=25,
+        ticker=None,
+    )
+    assert "2015–2024 · Ford F-150" in memos
+    assert "All years" not in memos
+
+
+def test_dashboard_filter_option_still_says_all_years(chart_ctx):
+    """Filter dropdown placeholder means 'no year filter' — leave its text alone."""
+    html = _render("dashboard.html", **_dashboard_ctx(**chart_ctx))
+    assert '<option value="">All years</option>' in html

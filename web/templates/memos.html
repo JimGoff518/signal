@@ -26,7 +26,7 @@
   {% for m in memos %}
   {% set p = PALETTE.get(m.classification, PALETTE['NOISE']) %}
   {% set lit = ((m.score / 10) | round | int) %}
-  {% set vehicle = ((m.model_year ~ ' ') if m.model_year else 'All years · ') ~ m.make|title ~ ' ' ~ m.model|title %}
+  {% set vehicle = ((m.model_year ~ ' ') if m.model_year else (m.year_label ~ ' · ')) ~ m.make|title ~ ' ' ~ m.model|title %}
   <article class="card p-4 md:p-5" aria-labelledby="memo-{{ m.id }}">
     <div class="flex items-start justify-between gap-4 flex-wrap">
       <div class="min-w-0">
