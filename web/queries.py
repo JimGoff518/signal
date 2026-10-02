@@ -11,6 +11,52 @@ from typing import Any
 from signalwarn.clustering import EXCLUDE_FILED_SQL
 from signalwarn.db import connection
 
+# SQL fragment: min/max model year from per-year sibling clusters sharing
+# make+model+component. Used only when the row is an ALL_YEARS rollup
+# (model_year IS NULL). Prefer attaching these in the SELECT over N+1 in Jinja.
+YEAR_SPAN_SELECT = """
+               CASE WHEN c.model_year IS NULL THEN (
+                 SELECT MIN(s.model_year) FROM clusters s
+                  WHERE s.make = c.make AND s.model = c.model
+                    AND s.component = c.component AND s.model_year IS NOT NULL
+               ) END AS year_min,
+               CASE WHEN c.model_year IS NULL THEN (
+                 SELECT MAX(s.model_year) FROM clusters s
+                  WHERE s.make = c.make AND s.model = c.model
+                    AND s.component = c.component AND s.model_year IS NOT NULL
+               ) END AS year_max
+"""
+
+
+def format_year_span(year_min: int | None, year_max: int | None) -> str:
+    """Display label for an ALL_YEARS rollup: `2015–2024`, `2015`, or `Multi-year`."""
+    if year_min is not None and year_max is not None:
+        if year_min == year_max:
+            return str(year_min)
+        return f"{year_min}–{year_max}"  # en dash
+    return "Multi-year"
+
+
+def year_label_for(
+    model_year: int | None,
+    year_min: int | None = None,
+    year_max: int | None = None,
+) -> str:
+    """Vehicle year label for templates: concrete year, span, or Multi-year fallback."""
+    if model_year is not None:
+        return str(model_year)
+    return format_year_span(year_min, year_max)
+
+
+def _with_year_label(row: dict[str, Any]) -> dict[str, Any]:
+    """Attach a preformatted `year_label` for Jinja vehicle strings."""
+    out = dict(row)
+    out["year_label"] = year_label_for(
+        out.get("model_year"), out.get("year_min"), out.get("year_max")
+    )
+    return out
+
+
 # Activity-window options shown in the filter dropdown. Keys are the labels;
 # values are the day floor (or None for "all time").
 ACTIVITY_WINDOWS: dict[str, int | None] = {
@@ -204,7 +250,8 @@ def list_clusters(
                    c.recall_issued, c.nhtsa_investigation_open,
                    c.class_action_filed, c.class_action_status, c.tx_complaint_count,
                    c.ewr_incident_count, c.ewr_death_count, c.ewr_injury_count,
-                   (c.viability_memo IS NOT NULL) AS has_memo
+                   (c.viability_memo IS NOT NULL) AS has_memo,
+                   {YEAR_SPAN_SELECT}
               FROM clusters c
              WHERE {where_sql}
              ORDER BY {order_by}, c.id
@@ -212,7 +259,7 @@ def list_clusters(
             """,
             {**params, "limit": limit, "offset": offset},
         )
-        return list(cur.fetchall()), total
+        return [_with_year_label(r) for r in cur.fetchall()], total
 
 
 def breakdown_in_view(column: str, limit: int = 8, **filters: Any) -> list[dict[str, Any]]:
@@ -294,8 +341,17 @@ def classification_counts(activity_window_days: int | None = 180) -> dict[str, i
 
 def get_cluster(cluster_id: int) -> dict[str, Any] | None:
     with connection() as conn, conn.cursor() as cur:
-        cur.execute("SELECT * FROM clusters WHERE id = %s", (cluster_id,))
-        return cur.fetchone()
+        cur.execute(
+            f"""
+            SELECT c.*,
+                   {YEAR_SPAN_SELECT}
+              FROM clusters c
+             WHERE c.id = %s
+            """,
+            (cluster_id,),
+        )
+        row = cur.fetchone()
+        return _with_year_label(row) if row else None
 
 
 def list_complaints(cluster_id: int, limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
@@ -458,18 +514,19 @@ def search_clusters(q: str, limit: int = 10) -> list[dict[str, Any]]:
     needle = f"%{q.lower()}%"
     with connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT id, make, model, model_year, component, classification,
-                   complaint_count, score, is_multi_year
-              FROM clusters
-             WHERE classification != 'NOISE'
-               AND (LOWER(make) LIKE %s OR LOWER(model) LIKE %s OR LOWER(component) LIKE %s)
-             ORDER BY score DESC, complaint_count DESC
+            f"""
+            SELECT c.id, c.make, c.model, c.model_year, c.component, c.classification,
+                   c.complaint_count, c.score, c.is_multi_year,
+                   {YEAR_SPAN_SELECT}
+              FROM clusters c
+             WHERE c.classification != 'NOISE'
+               AND (LOWER(c.make) LIKE %s OR LOWER(c.model) LIKE %s OR LOWER(c.component) LIKE %s)
+             ORDER BY c.score DESC, c.complaint_count DESC
              LIMIT %s
             """,
             (needle, needle, needle, limit),
         )
-        return list(cur.fetchall())
+        return [_with_year_label(r) for r in cur.fetchall()]
 
 
 def all_makes() -> list[str]:
@@ -527,7 +584,8 @@ def list_memos(
                    c.recall_issued, c.nhtsa_investigation_open,
                    c.class_action_filed, c.class_action_status,
                    c.viability_memo, c.memo_generated_at, c.memo_complaint_count_at_gen,
-                   c.research_memo, c.research_generated_at
+                   c.research_memo, c.research_generated_at,
+                   {YEAR_SPAN_SELECT}
               FROM clusters c
              WHERE {where_sql}
              ORDER BY GREATEST(c.memo_generated_at, c.research_generated_at) DESC NULLS LAST,
@@ -536,7 +594,7 @@ def list_memos(
             """,
             {**params, "limit": limit, "offset": offset},
         )
-        return list(cur.fetchall()), total
+        return [_with_year_label(r) for r in cur.fetchall()], total
 
 
 def header_stats() -> dict[str, Any]:

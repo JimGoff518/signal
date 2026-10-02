@@ -20,7 +20,7 @@
       </span>
       <div class="flex-1 min-w-0">
         <div class="text-sm text-zinc-100 truncate">
-          {% if r.model_year %}{{ r.model_year }}{% else %}<span class="text-zinc-500">All years</span>{% endif %}
+          {% if r.model_year %}{{ r.model_year }}{% else %}<span class="text-zinc-500">{{ r.year_label }}</span>{% endif %}
           {{ r.make|title }} {{ r.model|title }}
           <span class="text-zinc-500"> · {{ r.component }}</span>
         </div>

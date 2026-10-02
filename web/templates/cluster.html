@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% set p = PALETTE.get(cluster.classification, PALETTE['NOISE']) %}
-{% set vehicle = (cluster.model_year ~ ' ' if cluster.model_year else 'All years · ') ~ cluster.make|title ~ ' ' ~ cluster.model|title %}
+{% set vehicle = (cluster.model_year ~ ' ' if cluster.model_year else (cluster.year_label ~ ' · ')) ~ cluster.make|title ~ ' ' ~ cluster.model|title %}
 {% set lit = ((cluster.score / 10) | round | int) %}
 
 {% block content %}

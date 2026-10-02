@@ -82,3 +82,16 @@ def test_build_filters_ewr_reported():
     assert "c.ewr_incident_count > 0" in where
     where, _ = queries._build_filters(ewr="")
     assert "ewr_incident_count" not in where
+
+
+def test_format_year_span_rules():
+    assert queries.format_year_span(2015, 2024) == "2015–2024"
+    assert queries.format_year_span(2019, 2019) == "2019"
+    assert queries.format_year_span(None, None) == "Multi-year"
+    assert queries.format_year_span(2015, None) == "Multi-year"
+
+
+def test_year_label_for_prefers_concrete_model_year():
+    assert queries.year_label_for(2018, 2015, 2024) == "2018"
+    assert queries.year_label_for(None, 2015, 2024) == "2015–2024"
+    assert queries.year_label_for(None) == "Multi-year"

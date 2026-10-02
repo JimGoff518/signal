@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% macro vehicle_label(c) -%}
-  {% if c.model_year %}{{ c.model_year }}{% else %}<span class="text-zinc-500">All years</span>{% endif %}
+  {% if c.model_year %}{{ c.model_year }}{% else %}<span class="text-zinc-500">{{ c.year_label }}</span>{% endif %}
   {{ c.make|title }} {{ c.model|title }}
 {%- endmacro %}
 
