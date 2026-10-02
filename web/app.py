@@ -138,12 +138,17 @@ MASS_TORT_LABEL_PALETTE: dict[str, dict[str, str]] = {
         "text": "text-amber-400", "dot": "bg-amber-400",
         "badge": "bg-amber-500/15 text-amber-300 ring-amber-500/30",
     },
+    "HOLD": {
+        "text": "text-zinc-400", "dot": "bg-zinc-400",
+        "badge": "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
+    },
+    # PASS kept for back-compat reads; UI displays PASS as HOLD.
     "PASS": {
         "text": "text-zinc-400", "dot": "bg-zinc-400",
         "badge": "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
     },
 }
-MASS_TORT_LABEL_ORDER = ("INVEST", "CHASE", "WATCH", "PASS")
+MASS_TORT_LABEL_ORDER = ("INVEST", "CHASE", "WATCH", "HOLD")
 
 MASS_TORT_EVENT_LABELS: dict[str, str] = {
     "jpml_motion": "JPML motion",
@@ -154,11 +159,25 @@ MASS_TORT_EVENT_LABELS: dict[str, str] = {
     "other": "Other",
 }
 
+# Stage strip from last_event_type (no separate stage column).
+MASS_TORT_STAGE_STRIP: dict[str, str] = {
+    "jpml_motion": "Filings",
+    "transfer_order": "MDL",
+    "tag_along": "MDL",
+    "bellwether": "Bellwether",
+    "settlement": "Settlement",
+    "other": "Other",
+}
+
 templates.env.globals["PALETTE"] = CLASSIFICATION_PALETTE
 templates.env.globals["CLASSIFICATION_ORDER"] = CLASSIFICATION_ORDER
 templates.env.globals["MT_PALETTE"] = MASS_TORT_LABEL_PALETTE
 templates.env.globals["MT_LABEL_ORDER"] = MASS_TORT_LABEL_ORDER
 templates.env.globals["MT_EVENT_LABELS"] = MASS_TORT_EVENT_LABELS
+templates.env.globals["MT_STAGE_STRIP"] = MASS_TORT_STAGE_STRIP
+templates.env.globals["mt_decision_label"] = mtq.decision_label
+templates.env.globals["mt_preferred_url"] = mtq.preferred_source_url
+templates.env.globals["mt_stage_label"] = mtq.stage_strip_label
 templates.env.globals["ACTIVITY_WINDOWS"] = queries.ACTIVITY_WINDOWS
 templates.env.globals["SOL_YEARS"] = settings.sol_years
 
@@ -492,7 +511,7 @@ def mass_tort_page(
     user: str = Depends(require_auth),
     label: str | None = Query(None),
 ) -> Response:
-    """Internal Mass Tort tab: INVEST stack on top; filter WATCH / PASS / all."""
+    """Internal Mass Tort tab: INVEST stack on top; filter WATCH / HOLD / all."""
     selected = (label or "ALL").upper()
     if selected == "ALL":
         selected = "ALL"
@@ -513,7 +532,7 @@ def mass_tort_page(
     all_rows = rows if filter_label is None else mtq.list_matters()
     label_counts = {k: 0 for k in MASS_TORT_LABEL_ORDER}
     for r in all_rows:
-        hl = r.get("human_label")
+        hl = mtq.decision_label(r.get("human_label"))
         if hl in label_counts:
             label_counts[hl] += 1
     label_total = sum(label_counts.values())

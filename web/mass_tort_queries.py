@@ -20,13 +20,14 @@ LIST_ORDER_SQL = (
 MATTER_COLUMNS = """
     id, slug, caption, parent_slug, human_label, invest_score,
     mdl_or_jccp_id, court, pending_count, last_event_at, last_event_type,
-    source_urls, notes, priority_rank, updated_at, created_at
+    source_urls, notes, priority_rank, updated_at, created_at,
+    cl_filings_delta_7d, last_verified_at
 """
 
 # Whitelist of columns PATCH may touch. invest_score intentionally absent.
 PATCHABLE_FIELDS = frozenset({"human_label", "notes", "priority_rank"})
 
-HUMAN_LABELS = frozenset({"WATCH", "INVEST", "CHASE", "PASS"})
+HUMAN_LABELS = frozenset({"WATCH", "INVEST", "CHASE", "PASS", "HOLD"})
 
 
 def list_matters(*, human_label: str | None = None) -> list[dict[str, Any]]:
@@ -130,6 +131,8 @@ HARVESTABLE_FIELDS = frozenset({
     "last_event_type",
     "source_urls",
     "notes",
+    "cl_filings_delta_7d",
+    "last_verified_at",
 })
 
 EVENT_TYPES = frozenset({
@@ -268,3 +271,37 @@ def nest_matters_for_display(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
             child["nest_depth"] = 1
             out.append(child)
     return out
+
+
+def decision_label(human_label: str | None) -> str:
+    """Jimmy decision language: PASS displays as HOLD; prefer HOLD for new patches."""
+    if human_label == "PASS":
+        return "HOLD"
+    return human_label or "—"
+
+
+def preferred_source_url(urls: list | None) -> str | None:
+    """First JPML or CourtListener URL, else first source_url, else None."""
+    if not urls:
+        return None
+    items = [str(u) for u in urls if u]
+    for u in items:
+        low = u.lower()
+        if "jpml.uscourts.gov" in low or "courtlistener.com" in low:
+            return u
+    return items[0] if items else None
+
+
+def stage_strip_label(last_event_type: str | None) -> str:
+    """Map last_event_type → filings / MDL / bellwether / settlement strip."""
+    if not last_event_type:
+        return "—"
+    return {
+        "jpml_motion": "Filings",
+        "transfer_order": "MDL",
+        "tag_along": "MDL",
+        "bellwether": "Bellwether",
+        "settlement": "Settlement",
+        "other": "Other",
+    }.get(last_event_type, last_event_type)
+
