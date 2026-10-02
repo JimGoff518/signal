@@ -332,6 +332,60 @@ PENDING: list[tuple[str, str]] = [
         ON CONFLICT (slug) DO NOTHING;
         """,
     ),
+    (
+        "2026-10-02 — Mass Tort seed table: cl_filings_delta_7d + last_verified_at + HOLD",
+        """
+        ALTER TABLE mass_tort_matters
+          ADD COLUMN IF NOT EXISTS cl_filings_delta_7d INTEGER NULL;
+        ALTER TABLE mass_tort_matters
+          ADD COLUMN IF NOT EXISTS last_verified_at TIMESTAMPTZ NULL;
+        """,
+    ),
+    (
+        "2026-10-02 — Mass Tort human_label ADD HOLD",
+        """
+        ALTER TYPE mass_tort_human_label ADD VALUE IF NOT EXISTS 'HOLD';
+        """,
+    ),
+    (
+        "2026-10-02 — Mass Tort seed backfill: HOLD + last_event_type stage strip + last_verified_at",
+        """
+        UPDATE mass_tort_matters
+           SET human_label = 'HOLD',
+               updated_at = NOW()
+         WHERE human_label = 'PASS';
+        UPDATE mass_tort_matters
+           SET last_event_type = 'transfer_order',
+               updated_at = NOW()
+         WHERE slug IN (
+           'ai-litigation', 'roblox', 'spinal-cord-stimulator', 'glp1-gi',
+           'social-media-addiction', 'glp1-naion', 'hair-relaxer', 'pfas-afff'
+         )
+           AND last_event_type IS NULL;
+        UPDATE mass_tort_matters
+           SET last_event_type = 'jpml_motion',
+               updated_at = NOW()
+         WHERE slug IN (
+           'galaxy-gas', 'chlorpyrifos', 'olympus-scope', 'openai-suicide-pl'
+         )
+           AND last_event_type IS NULL;
+        UPDATE mass_tort_matters
+           SET last_event_type = 'other',
+               updated_at = NOW()
+         WHERE slug = 'exactech'
+           AND last_event_type IS NULL;
+        UPDATE mass_tort_matters
+           SET last_verified_at = TIMESTAMPTZ '2026-09-30 12:00:00-05:00',
+               updated_at = NOW()
+         WHERE slug IN (
+           'ai-litigation', 'openai-suicide-pl', 'galaxy-gas', 'roblox',
+           'spinal-cord-stimulator', 'glp1-gi', 'social-media-addiction',
+           'olympus-scope', 'chlorpyrifos', 'glp1-naion', 'hair-relaxer',
+           'pfas-afff', 'exactech'
+         )
+           AND last_verified_at IS NULL;
+        """,
+    ),
 ]
 
 
@@ -341,6 +395,10 @@ def apply_pending() -> int:
     Safe to call on every app startup — every statement is idempotent.
     Failures are logged but don't raise, so a transient DB hiccup at boot
     doesn't take the web service down. Subsequent boots will retry.
+
+    Commits after each entry so ALTER TYPE … ADD VALUE can be used by a
+    later entry in the same boot (Postgres forbids using a new enum label
+    until the adding transaction commits).
     """
     applied = 0
     try:
@@ -348,9 +406,9 @@ def apply_pending() -> int:
             for desc, sql in PENDING:
                 with conn.cursor() as cur:
                     cur.execute(sql)
+                conn.commit()
                 applied += 1
                 log.info("migration applied: %s", desc)
-            conn.commit()
     except Exception:
         log.exception("apply_pending failed; continuing without migration")
     return applied

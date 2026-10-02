@@ -23,7 +23,8 @@ class HumanLabel(str, Enum):
     WATCH = "WATCH"
     INVEST = "INVEST"
     CHASE = "CHASE"
-    PASS = "PASS"
+    PASS = "PASS"  # back-compat; UI displays as HOLD
+    HOLD = "HOLD"
 
 
 class MatterOut(BaseModel):
@@ -45,6 +46,8 @@ class MatterOut(BaseModel):
     priority_rank: int | None = None
     updated_at: datetime
     created_at: datetime
+    cl_filings_delta_7d: int | None = None
+    last_verified_at: datetime | None = None
 
 
 class MdlEventOut(BaseModel):
@@ -101,6 +104,8 @@ def _matter_out(row: dict[str, Any]) -> MatterOut:
         priority_rank=row.get("priority_rank"),
         updated_at=row["updated_at"],
         created_at=row["created_at"],
+        cl_filings_delta_7d=row.get("cl_filings_delta_7d"),
+        last_verified_at=row.get("last_verified_at"),
     )
 
 
@@ -176,6 +181,8 @@ class MatterHarvestWrite(BaseModel):
     last_event_type: str | None = None
     source_urls: list[str] | None = None
     notes: str | None = None
+    cl_filings_delta_7d: int | None = None
+    last_verified_at: datetime | None = None
     event: HarvestEventIn | None = None
 
 

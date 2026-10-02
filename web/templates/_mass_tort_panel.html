@@ -1,12 +1,14 @@
 {# Mass-tort matter detail as a slide-in drawer. No NHTSA charts. #}
-{% set p = MT_PALETTE.get(matter.human_label, MT_PALETTE['PASS']) %}
+{% set decision = mt_decision_label(matter.human_label) %}
+{% set p = MT_PALETTE.get(decision, MT_PALETTE['HOLD']) %}
+{% set stage = mt_stage_label(matter.last_event_type) %}
 
 <div class="flex flex-col h-full" id="panel-content">
   <div class="px-5 py-4 border-b border-zinc-800 flex items-start justify-between gap-3 flex-shrink-0">
     <div class="min-w-0">
       <div class="flex items-center gap-2 mb-1.5 flex-wrap">
         <span class="inline-flex items-center gap-1.5 font-display text-[11px] font-semibold tracking-wider uppercase {{ p.text }}">
-          <span class="w-1.5 h-1.5 rounded-full {{ p.dot }}" aria-hidden="true"></span>{{ matter.human_label }}
+          <span class="w-1.5 h-1.5 rounded-full {{ p.dot }}" aria-hidden="true"></span>{{ decision }}
         </span>
         {% if matter.mdl_or_jccp_id %}
           <span class="pill text-zinc-300 ring-zinc-700">{{ matter.mdl_or_jccp_id }}</span>
@@ -30,15 +32,29 @@
   <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
     <div class="grid grid-cols-2 gap-2">
       <div class="card-inset p-2.5">
-        <div class="eyebrow text-[10px]">Pending</div>
-        <div class="text-lg font-semibold mt-0.5 {% if matter.pending_count %}text-zinc-100{% else %}text-zinc-500{% endif %}">
-          {% if matter.pending_count is not none %}{{ "{:,}".format(matter.pending_count) }}{% else %}—{% endif %}
+        <div class="eyebrow text-[10px]">Stage</div>
+        <div class="text-lg font-semibold mt-0.5 {% if matter.last_event_type %}text-zinc-100{% else %}text-zinc-500{% endif %}">
+          {{ stage }}
         </div>
       </div>
       <div class="card-inset p-2.5">
-        <div class="eyebrow text-[10px]">Invest score</div>
-        <div class="text-lg font-semibold mt-0.5 {% if matter.invest_score is not none %}text-zinc-100{% else %}text-zinc-500{% endif %}">
-          {% if matter.invest_score is not none %}{{ matter.invest_score }}{% else %}—{% endif %}
+        <div class="eyebrow text-[10px]">7d CL Δ</div>
+        <div class="text-lg font-semibold mt-0.5 num {% if matter.cl_filings_delta_7d is not none %}text-zinc-100{% else %}text-zinc-500{% endif %}">
+          {% if matter.cl_filings_delta_7d is not none %}{{ "{:+d}".format(matter.cl_filings_delta_7d) }}{% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="card-inset p-2.5">
+        <div class="eyebrow text-[10px]">Last verified</div>
+        <div class="text-sm font-semibold mt-0.5 num {% if matter.last_verified_at %}text-zinc-100{% else %}text-zinc-500{% endif %}">
+          {% if matter.last_verified_at %}
+            {{ matter.last_verified_at.strftime("%b") }} {{ matter.last_verified_at.day }}, {{ matter.last_verified_at.year }}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="card-inset p-2.5">
+        <div class="eyebrow text-[10px]">Pending</div>
+        <div class="text-lg font-semibold mt-0.5 {% if matter.pending_count %}text-zinc-100{% else %}text-zinc-500{% endif %}">
+          {% if matter.pending_count is not none %}{{ "{:,}".format(matter.pending_count) }}{% else %}—{% endif %}
         </div>
       </div>
       <div class="card-inset p-2.5 col-span-2">
@@ -62,10 +78,10 @@
       <select id="mt-label-select" class="field" data-slug="{{ matter.slug }}"
               onchange="patchMatterLabel(this)" aria-label="Update human label">
         {% for key in MT_LABEL_ORDER %}
-          <option value="{{ key }}" {% if matter.human_label == key %}selected{% endif %}>{{ key }}</option>
+          <option value="{{ key }}" {% if decision == key %}selected{% endif %}>{{ key }}</option>
         {% endfor %}
       </select>
-      <p class="text-[11px] text-zinc-600 mt-1.5">Labels are the source of truth. Score stays blank until Jimmy sets one.</p>
+      <p class="text-[11px] text-zinc-600 mt-1.5">Decision is human-only (invest / chase / hold / watch). Score stays blank — never written from LexGenius.</p>
     </div>
 
     {% if matter.mdl_or_jccp_id or matter.court %}

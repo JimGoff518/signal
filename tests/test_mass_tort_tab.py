@@ -32,6 +32,8 @@ def _matter(**over):
         priority_rank=1,
         updated_at=now,
         created_at=now,
+        cl_filings_delta_7d=None,
+        last_verified_at=None,
         nest_depth=0,
     )
     base.update(over)
@@ -93,9 +95,12 @@ def test_mass_tort_list_template_renders_columns_and_filters():
         _matter(
             slug="pfas-afff",
             caption="PFAS (AFFF)",
-            human_label="PASS",
+            human_label="PASS",  # displays as HOLD
             mdl_or_jccp_id="MDL-2873",
+            last_event_type="transfer_order",
             priority_rank=None,
+            last_verified_at=datetime(2026, 9, 30, 17, 0, tzinfo=timezone.utc),
+            source_urls=["https://www.jpml.uscourts.gov/sites/jpml/files/x.pdf"],
         ),
     ]
     html = _render(
@@ -106,23 +111,31 @@ def test_mass_tort_list_template_renders_columns_and_filters():
         matters=matters,
         total=len(matters),
         selected_label="ALL",
-        label_counts={"INVEST": 2, "CHASE": 0, "WATCH": 0, "PASS": 1},
+        label_counts={"INVEST": 2, "CHASE": 0, "WATCH": 0, "HOLD": 1},
         label_total=3,
         ticker=None,
         PALETTE=webapp.CLASSIFICATION_PALETTE,
         MT_PALETTE=webapp.MASS_TORT_LABEL_PALETTE,
         MT_LABEL_ORDER=webapp.MASS_TORT_LABEL_ORDER,
         MT_EVENT_LABELS=webapp.MASS_TORT_EVENT_LABELS,
+        MT_STAGE_STRIP=webapp.MASS_TORT_STAGE_STRIP,
+        mt_decision_label=mtq.decision_label,
+        mt_preferred_url=mtq.preferred_source_url,
+        mt_stage_label=mtq.stage_strip_label,
     )
     assert "Mass tort" in html
-    assert "Label" in html and "Caption" in html and "MDL / JCCP" in html
-    assert "Pending" in html and "Last event" in html and "Updated" in html
-    assert "INVEST" in html and "PASS" in html
+    assert "Decision" in html and "Caption" in html and "Stage" in html
+    assert "7d CL" in html and "Last verified" in html and "Link" in html
+    # Primary list drops Pending / Last event / Updated.
+    assert ">Pending<" not in html.replace(" ", "")
+    assert "INVEST" in html and "HOLD" in html
     assert "AI litigation" in html
     assert "OpenAI suicide" in html
     assert "↳" in html  # nest marker
+    assert "MDL" in html  # stage strip from transfer_order
+    assert "JPML" in html  # preferred link label
     assert "/mass-tort?label=WATCH" in html
-    assert "/mass-tort?label=PASS" in html
+    assert "/mass-tort?label=HOLD" in html
     # No NHTSA / Filevine / Jev chrome on this tab.
     assert "NHTSA" not in html
     assert "Filevine" not in html
@@ -130,7 +143,12 @@ def test_mass_tort_list_template_renders_columns_and_filters():
 
 
 def test_mass_tort_panel_template_drawer_fields():
-    matter = _matter(notes="Do not merge with OpenAI row.")
+    matter = _matter(
+        notes="Do not merge with OpenAI row.",
+        last_event_type="transfer_order",
+        last_verified_at=datetime(2026, 9, 30, 17, 0, tzinfo=timezone.utc),
+        cl_filings_delta_7d=None,
+    )
     events = [
         {
             "id": uuid4(),
@@ -150,18 +168,24 @@ def test_mass_tort_panel_template_drawer_fields():
         MT_PALETTE=webapp.MASS_TORT_LABEL_PALETTE,
         MT_LABEL_ORDER=webapp.MASS_TORT_LABEL_ORDER,
         MT_EVENT_LABELS=webapp.MASS_TORT_EVENT_LABELS,
+        MT_STAGE_STRIP=webapp.MASS_TORT_STAGE_STRIP,
+        mt_decision_label=mtq.decision_label,
+        mt_preferred_url=mtq.preferred_source_url,
+        mt_stage_label=mtq.stage_strip_label,
     )
     assert "AI litigation (umbrella)" in html
     assert "MDL-3143" in html
     assert "S.D.N.Y." in html
     assert "Human label" in html
+    assert "Stage" in html and "MDL" in html
+    assert "7d CL" in html
+    assert "Last verified" in html
     assert "Source links" in html
     assert "https://example.test/a" in html
     assert "Do not merge with OpenAI row." in html
     assert "Event timeline" in html
     assert "Transfer order" in html
-    assert "Invest score" in html
-    assert "—" in html  # null score blank
+    assert "—" in html  # null 7d CL blank
     assert "NHTSA" not in html
 
 

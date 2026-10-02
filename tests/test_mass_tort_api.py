@@ -59,6 +59,8 @@ def test_patch_matter_updates_label_touches_updated_at(monkeypatch):
         "priority_rank": 3,
         "updated_at": datetime.now(timezone.utc),
         "created_at": datetime.now(timezone.utc),
+        "cl_filings_delta_7d": None,
+        "last_verified_at": None,
     }
     conn = FakeConn([updated])
     monkeypatch.setattr(mtq, "connection", fake_connection(conn))
@@ -166,6 +168,8 @@ def test_apply_harvest_write_updates_fields_not_label(monkeypatch):
         "priority_rank": 6,
         "updated_at": datetime.now(timezone.utc),
         "created_at": datetime.now(timezone.utc),
+        "cl_filings_delta_7d": 12,
+        "last_verified_at": datetime.now(timezone.utc),
     }
     conn = FakeConn([updated])
     monkeypatch.setattr(mtq, "connection", fake_connection(conn))
@@ -176,6 +180,8 @@ def test_apply_harvest_write_updates_fields_not_label(monkeypatch):
             "last_event_type": "other",
             "source_urls": ["https://example.com/a"],
             "notes": "WoW bump",
+            "cl_filings_delta_7d": 12,
+            "last_verified_at": updated["last_verified_at"],
         },
     )
     assert out["pending_count"] == 4100
@@ -217,6 +223,8 @@ def test_apply_harvest_appends_event(monkeypatch):
         "priority_rank": 4,
         "updated_at": datetime.now(timezone.utc),
         "created_at": datetime.now(timezone.utc),
+        "cl_filings_delta_7d": None,
+        "last_verified_at": None,
     }
     synced = dict(base)
     synced["last_event_type"] = "transfer_order"
@@ -248,3 +256,56 @@ def test_matter_harvest_model_excludes_label_score():
     assert "human_label" not in dumped
     assert "invest_score" not in dumped
     assert dumped["pending_count"] == 10
+
+
+def test_hold_label_accepted_in_patch_and_enum():
+    assert "HOLD" in mtq.HUMAN_LABELS
+    assert HumanLabel.HOLD.value == "HOLD"
+    body = MatterPatch(human_label=HumanLabel.HOLD)
+    assert body.model_dump(exclude_unset=True)["human_label"] is HumanLabel.HOLD
+
+
+def test_harvestable_includes_cl_delta_and_last_verified():
+    assert "cl_filings_delta_7d" in mtq.HARVESTABLE_FIELDS
+    assert "last_verified_at" in mtq.HARVESTABLE_FIELDS
+    assert "human_label" not in mtq.HARVESTABLE_FIELDS
+    assert "invest_score" not in mtq.HARVESTABLE_FIELDS
+    body = MatterHarvestWrite(cl_filings_delta_7d=3, last_verified_at=datetime.now(timezone.utc))
+    dumped = body.model_dump(exclude_unset=True)
+    assert dumped["cl_filings_delta_7d"] == 3
+    assert "last_verified_at" in dumped
+    assert "human_label" not in dumped
+
+
+def test_decision_label_maps_pass_to_hold():
+    assert mtq.decision_label("PASS") == "HOLD"
+    assert mtq.decision_label("HOLD") == "HOLD"
+    assert mtq.decision_label("WATCH") == "WATCH"
+    assert mtq.decision_label("INVEST") == "INVEST"
+
+
+def test_preferred_source_url_prefers_jpml_or_cl():
+    urls = [
+        "https://example.com/press",
+        "https://www.courtlistener.com/docket/1/",
+        "https://www.jpml.uscourts.gov/sites/jpml/files/x.pdf",
+    ]
+    # First JPML or CourtListener wins (CL appears before JPML here).
+    assert mtq.preferred_source_url(urls) == "https://www.courtlistener.com/docket/1/"
+    assert "jpml.uscourts.gov" in mtq.preferred_source_url([
+        "https://example.com/press",
+        "https://www.jpml.uscourts.gov/sites/jpml/files/x.pdf",
+    ])
+    assert mtq.preferred_source_url(["https://example.com/a"]) == "https://example.com/a"
+    assert mtq.preferred_source_url([]) is None
+
+
+def test_stage_strip_from_last_event_type():
+    assert mtq.stage_strip_label("jpml_motion") == "Filings"
+    assert mtq.stage_strip_label("transfer_order") == "MDL"
+    assert mtq.stage_strip_label("tag_along") == "MDL"
+    assert mtq.stage_strip_label("bellwether") == "Bellwether"
+    assert mtq.stage_strip_label("settlement") == "Settlement"
+    assert mtq.stage_strip_label("other") == "Other"
+    assert mtq.stage_strip_label(None) == "—"
+
