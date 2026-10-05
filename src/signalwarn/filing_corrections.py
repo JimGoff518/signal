@@ -16,7 +16,9 @@ separate, Jimmy-signed schema change — see the P0 GitHub issue.
 Williams (VT40/TR690 CVT) and Barba (GM 8-speed) both land on POWER TRAIN
 for GM makes; allow-lists keep them on disjoint model sets. Goldenkranz
 (ICCU) is Hyundai/Kia/Genesis EV electrical — most named models are not
-yet in TRACKED_VEHICLES (document gaps; do not invent tracks here).
+yet in TRACKED_VEHICLES (document gaps; do not invent tracks here). Cass
+(Altima passenger OCS/airbag) pins NISSAN ALTIMA AIR BAGS only — reject
+Rogue/Frontier false-attach.
 """
 from __future__ import annotations
 
@@ -71,6 +73,9 @@ MODEL_SIBLINGS: dict[str, dict[str, frozenset[str]]] = {
         "GV70": frozenset({"GV60", "GV70", "GV80"}),
         "GV80": frozenset({"GV60", "GV70", "GV80"}),
     },
+    "NISSAN": {
+        "ALTIMA": frozenset({"ALTIMA"}),
+    },
     "RAM": {
         "1500": frozenset({"1500"}),
         "2500": frozenset({"2500", "3500"}),
@@ -101,6 +106,7 @@ _MODEL_CAPTION_TOKENS: tuple[tuple[str, str], ...] = (
     ("tahoe", "TAHOE"),
     ("sierra", "SIERRA"),
     ("canyon", "CANYON"),
+    ("altima", "ALTIMA"),
     # Hyundai / Kia / Genesis EV tokens (Goldenkranz ICCU). Longer first.
     ("ioniq 5", "IONIQ 5"),
     ("ioniq 6", "IONIQ 6"),
@@ -136,8 +142,8 @@ class CaptionRule:
         return frozenset(m.upper() for m in self.allow_make)
 
 
-# Scout watches: Norberg/Petro/Thieme/O'Connor (PR #4) plus Williams CVT /
-# Barba 8-speed / Goldenkranz ICCU (this sweep).
+# Scout watches: Norberg/Petro/Thieme/O'Connor (PR #4); Williams CVT /
+# Barba 8-speed / Goldenkranz ICCU (PR #5); Cass Altima OCS (this sweep).
 CAPTION_RULES: tuple[CaptionRule, ...] = (
     CaptionRule(
         id="norberg_hurricane_ecm",
@@ -258,6 +264,22 @@ CAPTION_RULES: tuple[CaptionRule, ...] = (
             "Reject Tucson/Santa Fe/Elantra/Telluride/etc. Related older "
             "Young v. Hyundai Kefico (D.N.J. 3:26-cv-04198) is NOT this rule. "
             "Most named models are NOT in TRACKED_VEHICLES yet."
+        ),
+    ),
+    CaptionRule(
+        id="cass_nissan_altima_ocs",
+        match_any=("cass",),
+        allow_make="NISSAN",
+        allow_models=frozenset({"ALTIMA"}),
+        allow_components=frozenset({"AIR BAGS"}),
+        same_defect=True,
+        note=(
+            "Cass v. Nissan North America (C.D. Cal. 5:26-cv-05613, filed "
+            "2026-09-23; CL docket 74842719) — 2016–2018 Altima passenger "
+            "occupant classification sensor (OCS) / airbag. Attach only to "
+            "NISSAN::ALTIMA::*::AIR BAGS. Reject Rogue/Frontier and non-airbag "
+            "components. Caption rarely names airbag, so same_defect forced "
+            "True for this Scout-verified track."
         ),
     ),
 )
