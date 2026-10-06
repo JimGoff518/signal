@@ -185,3 +185,39 @@ def test_thieme_still_ok_after_equinox_sibling_union():
     )
     assert allowed_by_corrections(thieme, "CHEVROLET", "EQUINOX", "BRAKES")
     assert not allowed_by_corrections(thieme, "CHEVROLET", "SUBURBAN", "BRAKES")
+
+
+def test_cass_altima_ocs_allowed_on_altima_air_bags_not_rogue():
+    cass = _filing(
+        "Cass v. NISSAN NORTH AMERICA, INC",
+        court="District Court, C.D. California",
+    )
+    assert allowed_by_corrections(cass, "NISSAN", "ALTIMA", "AIR BAGS")
+    assert same_defect_override(cass) is True
+    # Tracked Nissan siblings — must not false-attach.
+    assert not allowed_by_corrections(cass, "NISSAN", "ROGUE", "AIR BAGS")
+    assert not allowed_by_corrections(cass, "NISSAN", "FRONTIER", "AIR BAGS")
+    # Wrong component on Altima.
+    assert not allowed_by_corrections(cass, "NISSAN", "ALTIMA", "ELECTRICAL")
+    assert not allowed_by_corrections(cass, "NISSAN", "ALTIMA", "POWER TRAIN")
+
+
+def test_find_class_action_skips_cass_on_rogue(monkeypatch):
+    class _Fake:
+        def search(self, q, *, limit=5, **_):
+            return [
+                _filing(
+                    "Cass v. NISSAN NORTH AMERICA, INC",
+                    court="District Court, C.D. California",
+                )
+            ]
+
+    assert find_class_action(_Fake(), "NISSAN", "ROGUE", "AIR BAGS") is None
+    hit = find_class_action(_Fake(), "NISSAN", "ALTIMA", "AIR BAGS")
+    assert hit is not None and "Cass" in hit.case_name
+
+
+def test_models_named_in_caption_finds_altima():
+    assert models_named_in_caption(
+        "Cass et al. v. Nissan North America — 2016-2018 Altima OCS"
+    ) >= {"ALTIMA"}
