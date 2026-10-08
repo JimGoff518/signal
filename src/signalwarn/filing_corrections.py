@@ -19,6 +19,14 @@ for GM makes; allow-lists keep them on disjoint model sets. Goldenkranz
 yet in TRACKED_VEHICLES (document gaps; do not invent tracks here). Cass
 (Altima passenger OCS/airbag) pins NISSAN ALTIMA AIR BAGS only — reject
 Rogue/Frontier false-attach.
+
+Fehrmann (2025 GM master brake cylinder) pins BRAKES on the named GM
+models only.
+
+allow_years limits a rule to cluster model years. A per-year key outside
+the set rejects the hit (same as a wrong model or component). An
+ALL_YEARS key still accepts it, but vehicle-only (same_defect False),
+because the aggregate mixes in-range and out-of-range years.
 """
 from __future__ import annotations
 
@@ -135,6 +143,10 @@ class CaptionRule:
     same_defect: bool | None = None
     deny_all: bool = False
     note: str = ""
+    # Cluster model years this filing covers. None = any year. A per-year
+    # cluster outside the set rejects the hit; an ALL_YEARS cluster accepts
+    # it vehicle-only (see same_defect_override).
+    allow_years: frozenset[int] | None = None
 
     def allowed_makes(self) -> frozenset[str]:
         if isinstance(self.allow_make, str):
@@ -143,7 +155,8 @@ class CaptionRule:
 
 
 # Scout watches: Norberg/Petro/Thieme/O'Connor (PR #4); Williams CVT /
-# Barba 8-speed / Goldenkranz ICCU (PR #5); Cass Altima OCS (this sweep).
+# Barba 8-speed / Goldenkranz ICCU (PR #5); Cass Altima OCS (PR #14);
+# Fehrmann GM brake (PR #17, with the model-year guard).
 CAPTION_RULES: tuple[CaptionRule, ...] = (
     CaptionRule(
         id="norberg_hurricane_ecm",
@@ -273,6 +286,7 @@ CAPTION_RULES: tuple[CaptionRule, ...] = (
         allow_models=frozenset({"ALTIMA"}),
         allow_components=frozenset({"AIR BAGS"}),
         same_defect=True,
+        allow_years=frozenset({2016, 2017, 2018}),
         note=(
             "Cass v. Nissan North America (C.D. Cal. 5:26-cv-05613, filed "
             "2026-09-23; CL docket 74842719) — 2016–2018 Altima passenger "
@@ -280,6 +294,36 @@ CAPTION_RULES: tuple[CaptionRule, ...] = (
             "NISSAN::ALTIMA::*::AIR BAGS. Reject Rogue/Frontier and non-airbag "
             "components. Caption rarely names airbag, so same_defect forced "
             "True for this Scout-verified track."
+        ),
+    ),
+    CaptionRule(
+        id="fehrmann_gm_master_brake_cylinder",
+        match_any=("fehrmann",),
+        allow_make=frozenset({"CHEVROLET", "GMC", "BUICK"}),
+        allow_models=frozenset(
+            {
+                "TRAVERSE",
+                "ACADIA",
+                "ENCLAVE",
+                "COLORADO",
+                "COLORADO ZR2 BISON",
+                "CANYON",
+                "CANYON AT4X AEV",
+            }
+        ),
+        allow_components=frozenset({"BRAKES"}),
+        same_defect=True,
+        allow_years=frozenset({2025}),
+        note=(
+            "Fehrmann v. General Motors LLC (E.D. Pa. 2:26-cv-07669, filed "
+            "2026-10-06; CL docket 74924532). 2025 Traverse / Acadia / "
+            "Enclave / Colorado / Canyon master brake cylinder, loss of "
+            "braking. Attach only to BRAKES on those models. Reject Silverado/"
+            "Sierra/Tahoe/Equinox and non-brake components. Traverse, Acadia "
+            "and Enclave are NOT in TRACKED_VEHICLES (BUICK is not tracked at "
+            "all). Colorado/Canyon are tracked but 2025 clusters may not exist "
+            "yet: recheck after #16. allow_years={2025}: 2015-2024 Colorado/"
+            "Canyon BRAKES keys reject; ALL_YEARS keys attach vehicle-only."
         ),
     ),
 )
@@ -328,9 +372,17 @@ def matching_rules(filing: Filing) -> list[CaptionRule]:
 
 
 def allowed_by_corrections(
-    filing: Filing, make: str, model: str, component: str
+    filing: Filing,
+    make: str,
+    model: str,
+    component: str,
+    model_year: int | None = None,
 ) -> bool:
-    """Return False when a curated rule forbids this (make, model, component)."""
+    """Return False when a curated rule forbids this (make, model, component).
+
+    `model_year` is the cluster's year. None means an ALL_YEARS aggregate
+    (or a caller with no year); allow_years never rejects those.
+    """
     rules = matching_rules(filing)
     if not rules:
         # No curated rule: sibling/caption model conflict is the only gate
@@ -351,6 +403,12 @@ def allowed_by_corrections(
             and component.upper() not in rule.allow_components
         ):
             return False
+        if (
+            rule.allow_years is not None
+            and model_year is not None
+            and model_year not in rule.allow_years
+        ):
+            return False
     return True
 
 
@@ -361,8 +419,17 @@ def status_override(filing: Filing) -> str | None:
     return None
 
 
-def same_defect_override(filing: Filing) -> bool | None:
-    for rule in matching_rules(filing):
+def same_defect_override(filing: Filing, *, all_years: bool = False) -> bool | None:
+    """Forced same_defect for this filing, or None to fall back to names_defect.
+
+    `all_years` is True for an ALL_YEARS / multi-year cluster. A year-limited
+    rule cannot vouch for every year in that aggregate, so it goes
+    vehicle-only (False).
+    """
+    rules = matching_rules(filing)
+    if all_years and any(r.allow_years is not None for r in rules):
+        return False
+    for rule in rules:
         if rule.same_defect is not None:
             return rule.same_defect
     return None

@@ -56,7 +56,8 @@ def run_check_filings(
     where_sql = " AND ".join(where_clauses)
 
     sql = f"""
-        SELECT id, make, model, component, classification, score
+        SELECT id, make, model, model_year, is_multi_year, component,
+               classification, score
           FROM clusters
          WHERE {where_sql}
          ORDER BY score DESC, complaint_count DESC
@@ -98,15 +99,21 @@ def run_check_filings(
                 skipped += 1
                 _mark_checked(c["id"], filing=None, same_defect=False, status=None, dry_run=dry_run)
                 continue
+            # ALL_YEARS aggregate: model_year is NULL. Year-limited rules
+            # accept it but only vehicle-only (see same_defect_override).
+            all_years = c.get("model_year") is None or bool(c.get("is_multi_year"))
+            year = None if all_years else c.get("model_year")
             try:
-                filing = find_class_action(client, c["make"], c["model"], c["component"])
+                filing = find_class_action(
+                    client, c["make"], c["model"], c["component"], model_year=year
+                )
             except Exception as e:
                 log.warning("error on cluster %s (%s %s %s): %s",
                             c["id"], c["make"], c["model"], c["component"], e)
                 errors += 1
                 continue
             if filing:
-                override = same_defect_override(filing)
+                override = same_defect_override(filing, all_years=all_years)
                 same_defect = (
                     override if override is not None
                     else names_defect(filing, c["component"])
