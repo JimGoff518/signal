@@ -19,6 +19,13 @@ for GM makes; allow-lists keep them on disjoint model sets. Goldenkranz
 yet in TRACKED_VEHICLES (document gaps; do not invent tracks here). Cass
 (Altima passenger OCS/airbag) pins NISSAN ALTIMA AIR BAGS only — reject
 Rogue/Frontier false-attach.
+
+Fehrmann (2025 GM master brake cylinder) pins BRAKES on the named GM
+models only. Hubof (Duramax oil cooler) pins ENGINE on Silverado/Sierra
+HD names; the base SILVERADO/SIERRA keys cannot separate HD from 1500, so
+same_defect is False. Heikkila (BMW A/C evaporator) has no A/C bucket:
+those complaints normalize to OTHER (sometimes ELECTRICAL), so it attaches
+vehicle-only. BMW is not in TRACKED_VEHICLES.
 """
 from __future__ import annotations
 
@@ -143,7 +150,8 @@ class CaptionRule:
 
 
 # Scout watches: Norberg/Petro/Thieme/O'Connor (PR #4); Williams CVT /
-# Barba 8-speed / Goldenkranz ICCU (PR #5); Cass Altima OCS (this sweep).
+# Barba 8-speed / Goldenkranz ICCU (PR #5); Cass Altima OCS (PR #14);
+# Fehrmann GM brake / Hubof Duramax oil cooler / Heikkila BMW A/C.
 CAPTION_RULES: tuple[CaptionRule, ...] = (
     CaptionRule(
         id="norberg_hurricane_ecm",
@@ -280,6 +288,159 @@ CAPTION_RULES: tuple[CaptionRule, ...] = (
             "NISSAN::ALTIMA::*::AIR BAGS. Reject Rogue/Frontier and non-airbag "
             "components. Caption rarely names airbag, so same_defect forced "
             "True for this Scout-verified track."
+        ),
+    ),
+    CaptionRule(
+        id="fehrmann_gm_master_brake_cylinder",
+        match_any=("fehrmann",),
+        allow_make=frozenset({"CHEVROLET", "GMC", "BUICK"}),
+        allow_models=frozenset(
+            {
+                "TRAVERSE",
+                "ACADIA",
+                "ENCLAVE",
+                "COLORADO",
+                "COLORADO ZR2 BISON",
+                "CANYON",
+                "CANYON AT4X AEV",
+            }
+        ),
+        allow_components=frozenset({"BRAKES"}),
+        same_defect=True,
+        note=(
+            "Fehrmann v. General Motors LLC (E.D. Pa. 2:26-cv-07669, filed "
+            "2026-10-06; CL docket 74924532). 2025 Traverse / Acadia / "
+            "Enclave / Colorado / Canyon master brake cylinder, loss of "
+            "braking. Attach only to BRAKES on those models. Reject Silverado/"
+            "Sierra/Tahoe/Equinox and non-brake components. Traverse, Acadia "
+            "and Enclave are NOT in TRACKED_VEHICLES (BUICK is not tracked at "
+            "all). Colorado/Canyon are tracked but 2025 clusters may not exist "
+            "yet: recheck after #16. No model-year gate, so older Colorado/"
+            "Canyon BRAKES keys also accept this hit."
+        ),
+    ),
+    CaptionRule(
+        id="hubof_gm_duramax_oil_cooler",
+        match_any=("hubof",),
+        allow_make=frozenset({"CHEVROLET", "GMC"}),
+        # Base names (what MODEL_SIBLINGS and earlier rules use) plus the HD
+        # model strings NHTSA reports for 2024-2026. 1500 and EV names are
+        # left out on purpose.
+        allow_models=frozenset(
+            {
+                "SILVERADO",
+                "SILVERADO 2500",
+                "SILVERADO 2500 ICE",
+                "SILVERADO 2500HD",
+                "SILVERADO 2500 HD",
+                "SILVERADO 3500",
+                "SILVERADO 3500HD",
+                "SILVERADO 3500 HD",
+                "SIERRA",
+                "SIERRA HD",
+                "SIERRA 2500",
+                "SIERRA 2500 ICE",
+                "SIERRA 2500HD",
+                "SIERRA 2500 HD",
+                "SIERRA 3500",
+                "SIERRA 3500HD",
+                "SIERRA 3500 HD",
+            }
+        ),
+        # Oil cooler complaints file as "ENGINE AND ENGINE COOLING" -> ENGINE.
+        allow_components=frozenset({"ENGINE"}),
+        # A base SILVERADO / SIERRA ENGINE key mixes 1500 (6.2L L87) with
+        # HD. Force False so Hubof does not hide the 1500 engine track.
+        same_defect=False,
+        note=(
+            "Hubof v. General Motors, LLC (E.D. Mich. 2:26-cv-13622, filed "
+            "2026-09-24; CL docket 74843881). 2024-2026 Silverado / Sierra "
+            "2500HD/3500HD 6.6L Duramax cracked oil cooler. Attach only to "
+            "ENGINE on Silverado/Sierra HD names. Reject 1500, EV, Colorado/"
+            "Canyon and non-engine components. Base SILVERADO/SIERRA keys "
+            "cannot tell HD from 1500, so same_defect forced False. Model "
+            "year 2026 is outside MODEL_YEARS; 2024-2025 clusters: recheck "
+            "after #16."
+        ),
+    ),
+    CaptionRule(
+        id="heikkila_bmw_ac_evaporator",
+        match_any=("heikkila",),
+        allow_make="BMW",
+        # G-chassis families as NHTSA names them (2018-2025). F-chassis
+        # X1 / X2 / 2 Series Gran Coupe / i3 and motorcycles are left out.
+        allow_models=frozenset(
+            {
+                "2 SERIES COUPE",
+                "M240I",
+                "3 SERIES",
+                "3 SERIES SEDAN",
+                "3 SERIES HYBRID SEDAN",
+                "330E",
+                "M340I",
+                "M3",
+                "4 SERIES",
+                "4 SERIES COUPE",
+                "4 SERIES CONVERTIBLE",
+                "4 SERIES GRAN COUPE",
+                "430I",
+                "430I XDRIVE",
+                "M440I",
+                "M4",
+                "M4 COUPE",
+                "M4 CONVERTIBLE",
+                "I4",
+                "I4 GRAN COUPE",
+                "I4 EDRIVE40",
+                "I4 XDRIVE40",
+                "5 SERIES",
+                "5 SERIES PHEV",
+                "5 SERIES HYBRID SEDAN",
+                "530I",
+                "530E",
+                "540I",
+                "M550I",
+                "M5",
+                "I5",
+                "6 SERIES",
+                "7 SERIES",
+                "7 SERIES SEDAN",
+                "7 SERIES PHEV",
+                "7 SERIES HYBRID SEDAN",
+                "750I",
+                "M760I",
+                "I7",
+                "I7 SEDAN",
+                "8 SERIES",
+                "8 SERIES COUPE",
+                "8 SERIES CONVERTIBLE",
+                "8 SERIES GRAN COUPE",
+                "M850I",
+                "X3",
+                "X4",
+                "X5",
+                "X5 HYBRID",
+                "X6",
+                "X7",
+                "XM",
+                "Z4",
+                "Z4 M40I",
+            }
+        ),
+        # No A/C bucket. NHTSA files evaporator complaints as UNKNOWN OR
+        # OTHER / VISIBILITY (-> OTHER) and sometimes ELECTRICAL SYSTEM.
+        allow_components=frozenset({"OTHER", "ELECTRICAL"}),
+        # Both buckets are broad. Vehicle-only, so a Heikkila hit never
+        # hides an unrelated BMW OTHER / ELECTRICAL cluster.
+        same_defect=False,
+        note=(
+            "Heikkila v. BMW of North America, LLC (D.N.J. 2:26-cv-12932, "
+            "filed 2026-10-02; CL docket 74910947). 2018-2025 G-chassis A/C "
+            "evaporator corrosion (~1M vehicles). Attach only to BMW OTHER / "
+            "ELECTRICAL (where A/C complaints land); vehicle-only because "
+            "both buckets are broad. BMW is NOT in TRACKED_VEHICLES, and "
+            "check_filings skips OTHER (no search terms), so this rule is "
+            "inert until BMW is tracked."
         ),
     ),
 )

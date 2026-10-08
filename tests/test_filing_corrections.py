@@ -221,3 +221,112 @@ def test_models_named_in_caption_finds_altima():
     assert models_named_in_caption(
         "Cass et al. v. Nissan North America — 2016-2018 Altima OCS"
     ) >= {"ALTIMA"}
+
+
+def test_fehrmann_brake_allowed_on_named_gm_brakes_only():
+    fehrmann = _filing(
+        "Fehrmann v. GENERAL MOTORS LLC",
+        court="District Court, E.D. Pennsylvania",
+    )
+    # Tracked homes (Colorado / Canyon) plus untracked named models.
+    assert allowed_by_corrections(fehrmann, "CHEVROLET", "COLORADO", "BRAKES")
+    assert allowed_by_corrections(fehrmann, "GMC", "CANYON", "BRAKES")
+    assert allowed_by_corrections(fehrmann, "CHEVROLET", "TRAVERSE", "BRAKES")
+    assert allowed_by_corrections(fehrmann, "GMC", "ACADIA", "BRAKES")
+    assert allowed_by_corrections(fehrmann, "BUICK", "ENCLAVE", "BRAKES")
+    assert same_defect_override(fehrmann) is True
+    # Other GM models with tracked BRAKES keys must not take it.
+    assert not allowed_by_corrections(fehrmann, "CHEVROLET", "SILVERADO", "BRAKES")
+    assert not allowed_by_corrections(fehrmann, "GMC", "SIERRA", "BRAKES")
+    assert not allowed_by_corrections(fehrmann, "CHEVROLET", "EQUINOX", "BRAKES")
+    assert not allowed_by_corrections(fehrmann, "CHEVROLET", "SUBURBAN", "BRAKES")
+    assert not allowed_by_corrections(fehrmann, "GMC", "YUKON", "BRAKES")
+    # Non-brake components on the right model.
+    assert not allowed_by_corrections(fehrmann, "CHEVROLET", "COLORADO", "ENGINE")
+    assert not allowed_by_corrections(fehrmann, "GMC", "CANYON", "POWER TRAIN")
+    assert not allowed_by_corrections(fehrmann, "CHEVROLET", "COLORADO", "ELECTRICAL")
+    # Wrong make.
+    assert not allowed_by_corrections(fehrmann, "FORD", "RANGER", "BRAKES")
+
+
+def test_find_class_action_skips_fehrmann_on_silverado_brakes(monkeypatch):
+    class _Fake:
+        def search(self, q, *, limit=5, **_):
+            return [
+                _filing(
+                    "Fehrmann v. GENERAL MOTORS LLC",
+                    court="District Court, E.D. Pennsylvania",
+                )
+            ]
+
+    assert find_class_action(_Fake(), "CHEVROLET", "SILVERADO", "BRAKES") is None
+    assert find_class_action(_Fake(), "CHEVROLET", "COLORADO", "ENGINE") is None
+    hit = find_class_action(_Fake(), "CHEVROLET", "COLORADO", "BRAKES")
+    assert hit is not None and "Fehrmann" in hit.case_name
+
+
+def test_hubof_oil_cooler_allowed_on_hd_engine_only():
+    hubof = _filing("Hubof v. General Motors, LLC")
+    # Base tracked keys (cannot tell HD from 1500) and HD model strings.
+    assert allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO", "ENGINE")
+    assert allowed_by_corrections(hubof, "GMC", "SIERRA", "ENGINE")
+    assert allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO 2500", "ENGINE")
+    assert allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO 3500", "ENGINE")
+    assert allowed_by_corrections(hubof, "GMC", "SIERRA 2500 HD", "ENGINE")
+    assert allowed_by_corrections(hubof, "GMC", "SIERRA HD", "ENGINE")
+    # Vehicle-only: base keys mix 1500 L87 engine complaints with HD.
+    assert same_defect_override(hubof) is False
+    # 1500 / EV / midsize must not take it.
+    assert not allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO 1500", "ENGINE")
+    assert not allowed_by_corrections(hubof, "GMC", "SIERRA 1500", "ENGINE")
+    assert not allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO EV", "ENGINE")
+    assert not allowed_by_corrections(hubof, "CHEVROLET", "COLORADO", "ENGINE")
+    assert not allowed_by_corrections(hubof, "CHEVROLET", "TAHOE", "ENGINE")
+    # Wrong component on the right truck.
+    assert not allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO", "POWER TRAIN")
+    assert not allowed_by_corrections(hubof, "GMC", "SIERRA", "BRAKES")
+    assert not allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO 2500", "FUEL SYSTEM")
+    # Wrong make (Ram HD diesel shares the ENGINE bucket).
+    assert not allowed_by_corrections(hubof, "RAM", "2500", "ENGINE")
+
+
+def test_heikkila_ac_allowed_on_bmw_g_chassis_other_and_electrical():
+    heikkila = _filing(
+        "HEIKKILA v. BMW OF NORTH AMERICA, LLC",
+        court="District Court, D. New Jersey",
+    )
+    assert allowed_by_corrections(heikkila, "BMW", "X5", "OTHER")
+    assert allowed_by_corrections(heikkila, "BMW", "X3", "ELECTRICAL")
+    assert allowed_by_corrections(heikkila, "BMW", "3 SERIES", "OTHER")
+    assert allowed_by_corrections(heikkila, "BMW", "5 SERIES", "OTHER")
+    # Broad buckets: vehicle-only so unrelated BMW clusters are not hidden.
+    assert same_defect_override(heikkila) is False
+    # F-chassis / non-G models and motorcycles must not take it.
+    assert not allowed_by_corrections(heikkila, "BMW", "X1", "OTHER")
+    assert not allowed_by_corrections(heikkila, "BMW", "X2", "OTHER")
+    assert not allowed_by_corrections(heikkila, "BMW", "I3 BEV", "OTHER")
+    assert not allowed_by_corrections(heikkila, "BMW", "R 1250 GS", "OTHER")
+    # Wrong component.
+    assert not allowed_by_corrections(heikkila, "BMW", "X5", "ENGINE")
+    assert not allowed_by_corrections(heikkila, "BMW", "X5", "BRAKES")
+    assert not allowed_by_corrections(heikkila, "BMW", "X5", "POWER TRAIN")
+    # Wrong make.
+    assert not allowed_by_corrections(heikkila, "TOYOTA", "RAV4", "OTHER")
+
+
+def test_new_rules_do_not_cross_attach():
+    fehrmann = _filing("Fehrmann v. GENERAL MOTORS LLC")
+    hubof = _filing("Hubof v. General Motors, LLC")
+    heikkila = _filing("HEIKKILA v. BMW OF NORTH AMERICA, LLC")
+    # Hubof oil cooler stays off brake keys; Fehrmann stays off HD engine.
+    assert not allowed_by_corrections(hubof, "CHEVROLET", "COLORADO", "BRAKES")
+    assert not allowed_by_corrections(fehrmann, "CHEVROLET", "SILVERADO 2500", "ENGINE")
+    assert not allowed_by_corrections(heikkila, "CHEVROLET", "COLORADO", "BRAKES")
+    # Each caption matches exactly its own rule.
+    from signalwarn.filing_corrections import matching_rules
+
+    assert [r.id for r in matching_rules(fehrmann)] == [
+        "fehrmann_gm_master_brake_cylinder"
+    ]
+    assert [r.id for r in matching_rules(hubof)] == ["hubof_gm_duramax_oil_cooler"]
+    assert [r.id for r in matching_rules(heikkila)] == ["heikkila_bmw_ac_evaporator"]
