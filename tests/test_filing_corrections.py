@@ -265,68 +265,152 @@ def test_find_class_action_skips_fehrmann_on_silverado_brakes(monkeypatch):
     assert hit is not None and "Fehrmann" in hit.case_name
 
 
-def test_hubof_oil_cooler_allowed_on_hd_engine_only():
-    hubof = _filing("Hubof v. General Motors, LLC")
-    # Base tracked keys (cannot tell HD from 1500) and HD model strings.
-    assert allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO", "ENGINE")
-    assert allowed_by_corrections(hubof, "GMC", "SIERRA", "ENGINE")
-    assert allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO 2500", "ENGINE")
-    assert allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO 3500", "ENGINE")
-    assert allowed_by_corrections(hubof, "GMC", "SIERRA 2500 HD", "ENGINE")
-    assert allowed_by_corrections(hubof, "GMC", "SIERRA HD", "ENGINE")
-    # Vehicle-only: base keys mix 1500 L87 engine complaints with HD.
-    assert same_defect_override(hubof) is False
-    # 1500 / EV / midsize must not take it.
-    assert not allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO 1500", "ENGINE")
-    assert not allowed_by_corrections(hubof, "GMC", "SIERRA 1500", "ENGINE")
-    assert not allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO EV", "ENGINE")
-    assert not allowed_by_corrections(hubof, "CHEVROLET", "COLORADO", "ENGINE")
-    assert not allowed_by_corrections(hubof, "CHEVROLET", "TAHOE", "ENGINE")
-    # Wrong component on the right truck.
-    assert not allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO", "POWER TRAIN")
-    assert not allowed_by_corrections(hubof, "GMC", "SIERRA", "BRAKES")
-    assert not allowed_by_corrections(hubof, "CHEVROLET", "SILVERADO 2500", "FUEL SYSTEM")
-    # Wrong make (Ram HD diesel shares the ENGINE bucket).
-    assert not allowed_by_corrections(hubof, "RAM", "2500", "ENGINE")
+
+# ─── Model-year guard (allow_years) ─────────────────────────────────────
 
 
-def test_heikkila_ac_allowed_on_bmw_g_chassis_other_and_electrical():
-    heikkila = _filing(
-        "HEIKKILA v. BMW OF NORTH AMERICA, LLC",
-        court="District Court, D. New Jersey",
-    )
-    assert allowed_by_corrections(heikkila, "BMW", "X5", "OTHER")
-    assert allowed_by_corrections(heikkila, "BMW", "X3", "ELECTRICAL")
-    assert allowed_by_corrections(heikkila, "BMW", "3 SERIES", "OTHER")
-    assert allowed_by_corrections(heikkila, "BMW", "5 SERIES", "OTHER")
-    # Broad buckets: vehicle-only so unrelated BMW clusters are not hidden.
-    assert same_defect_override(heikkila) is False
-    # F-chassis / non-G models and motorcycles must not take it.
-    assert not allowed_by_corrections(heikkila, "BMW", "X1", "OTHER")
-    assert not allowed_by_corrections(heikkila, "BMW", "X2", "OTHER")
-    assert not allowed_by_corrections(heikkila, "BMW", "I3 BEV", "OTHER")
-    assert not allowed_by_corrections(heikkila, "BMW", "R 1250 GS", "OTHER")
-    # Wrong component.
-    assert not allowed_by_corrections(heikkila, "BMW", "X5", "ENGINE")
-    assert not allowed_by_corrections(heikkila, "BMW", "X5", "BRAKES")
-    assert not allowed_by_corrections(heikkila, "BMW", "X5", "POWER TRAIN")
-    # Wrong make.
-    assert not allowed_by_corrections(heikkila, "TOYOTA", "RAV4", "OTHER")
-
-
-def test_new_rules_do_not_cross_attach():
+def test_fehrmann_year_guard_rejects_2019_accepts_2025():
     fehrmann = _filing("Fehrmann v. GENERAL MOTORS LLC")
-    hubof = _filing("Hubof v. General Motors, LLC")
-    heikkila = _filing("HEIKKILA v. BMW OF NORTH AMERICA, LLC")
-    # Hubof oil cooler stays off brake keys; Fehrmann stays off HD engine.
-    assert not allowed_by_corrections(hubof, "CHEVROLET", "COLORADO", "BRAKES")
-    assert not allowed_by_corrections(fehrmann, "CHEVROLET", "SILVERADO 2500", "ENGINE")
-    assert not allowed_by_corrections(heikkila, "CHEVROLET", "COLORADO", "BRAKES")
-    # Each caption matches exactly its own rule.
-    from signalwarn.filing_corrections import matching_rules
+    assert not allowed_by_corrections(
+        fehrmann, "CHEVROLET", "COLORADO", "BRAKES", model_year=2019
+    )
+    assert not allowed_by_corrections(
+        fehrmann, "GMC", "CANYON", "BRAKES", model_year=2024
+    )
+    assert allowed_by_corrections(
+        fehrmann, "CHEVROLET", "COLORADO", "BRAKES", model_year=2025
+    )
+    assert allowed_by_corrections(fehrmann, "GMC", "CANYON", "BRAKES", model_year=2025)
+    # Right year does not rescue a wrong model or component.
+    assert not allowed_by_corrections(
+        fehrmann, "CHEVROLET", "SILVERADO", "BRAKES", model_year=2025
+    )
+    assert not allowed_by_corrections(
+        fehrmann, "CHEVROLET", "COLORADO", "ENGINE", model_year=2025
+    )
 
-    assert [r.id for r in matching_rules(fehrmann)] == [
-        "fehrmann_gm_master_brake_cylinder"
+
+def test_cass_year_guard_rejects_2014_accepts_2017():
+    cass = _filing(
+        "Cass v. NISSAN NORTH AMERICA, INC",
+        court="District Court, C.D. California",
+    )
+    assert not allowed_by_corrections(cass, "NISSAN", "ALTIMA", "AIR BAGS", model_year=2014)
+    assert not allowed_by_corrections(cass, "NISSAN", "ALTIMA", "AIR BAGS", model_year=2019)
+    assert allowed_by_corrections(cass, "NISSAN", "ALTIMA", "AIR BAGS", model_year=2017)
+    assert allowed_by_corrections(cass, "NISSAN", "ALTIMA", "AIR BAGS", model_year=2016)
+    assert allowed_by_corrections(cass, "NISSAN", "ALTIMA", "AIR BAGS", model_year=2018)
+
+
+def test_all_years_key_attaches_vehicle_only_when_rule_has_allow_years():
+    fehrmann = _filing("Fehrmann v. GENERAL MOTORS LLC")
+    cass = _filing("Cass v. NISSAN NORTH AMERICA, INC")
+    # ALL_YEARS aggregate (model_year None) is not rejected by the year guard.
+    assert allowed_by_corrections(fehrmann, "CHEVROLET", "COLORADO", "BRAKES")
+    assert allowed_by_corrections(cass, "NISSAN", "ALTIMA", "AIR BAGS", model_year=None)
+    # But it goes vehicle-only.
+    assert same_defect_override(fehrmann, all_years=True) is False
+    assert same_defect_override(cass, all_years=True) is False
+    # Per-year keys keep the forced same_defect.
+    assert same_defect_override(fehrmann) is True
+    assert same_defect_override(cass, all_years=False) is True
+
+
+def test_rules_without_allow_years_unchanged_on_all_years_keys():
+    thieme = _filing("Thieme v. General Motors LLC (Equinox Vacuum Pump)")
+    petro = _filing("Petro v. FCA US LLC (HEMI Engine)")
+    assert allowed_by_corrections(thieme, "CHEVROLET", "EQUINOX", "BRAKES", model_year=2012)
+    assert same_defect_override(thieme, all_years=True) is True
+    assert same_defect_override(petro, all_years=True) is True
+
+
+def test_find_class_action_year_guard_skips_to_next_hit():
+    """A wrong-year Fehrmann hit is skipped like a wrong-model hit, so the
+    next plausible filing in the results can still attach."""
+
+    other = _filing("Smith v. General Motors LLC (Colorado brake booster)")
+
+    class _Fake:
+        def search(self, q, *, limit=5, **_):
+            return [_filing("Fehrmann v. GENERAL MOTORS LLC"), other]
+
+    hit_2019 = find_class_action(
+        _Fake(), "CHEVROLET", "COLORADO", "BRAKES", model_year=2019
+    )
+    assert hit_2019 is not None and "Smith" in hit_2019.case_name
+    hit_2025 = find_class_action(
+        _Fake(), "CHEVROLET", "COLORADO", "BRAKES", model_year=2025
+    )
+    assert hit_2025 is not None and "Fehrmann" in hit_2025.case_name
+    hit_all = find_class_action(_Fake(), "CHEVROLET", "COLORADO", "BRAKES")
+    assert hit_all is not None and "Fehrmann" in hit_all.case_name
+
+
+def test_run_check_filings_plumbs_model_year_and_all_years(monkeypatch):
+    """SELECT now carries model_year / is_multi_year; the loop passes them on."""
+    import signalwarn.filings_check as fc
+
+    rows = [
+        {"id": 1, "make": "CHEVROLET", "model": "COLORADO", "model_year": 2019,
+         "is_multi_year": False, "component": "BRAKES",
+         "classification": "SIGNAL", "score": 90},
+        {"id": 2, "make": "CHEVROLET", "model": "COLORADO", "model_year": 2025,
+         "is_multi_year": False, "component": "BRAKES",
+         "classification": "SIGNAL", "score": 80},
+        {"id": 3, "make": "CHEVROLET", "model": "COLORADO", "model_year": None,
+         "is_multi_year": True, "component": "BRAKES",
+         "classification": "SIGNAL", "score": 70},
     ]
-    assert [r.id for r in matching_rules(hubof)] == ["hubof_gm_duramax_oil_cooler"]
-    assert [r.id for r in matching_rules(heikkila)] == ["heikkila_bmw_ac_evaporator"]
+    seen_sql: list[str] = []
+
+    class _Cur:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def execute(self, sql, params=None):
+            seen_sql.append(sql)
+
+        def fetchall(self):
+            return list(rows)
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def cursor(self):
+            return _Cur()
+
+    class _Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def search(self, q, *, limit=5, **_):
+            return [_filing("Fehrmann v. GENERAL MOTORS LLC")]
+
+    marked: dict[int, tuple] = {}
+
+    def _fake_mark(cluster_id, *, filing, same_defect, status=None, dry_run=False):
+        marked[cluster_id] = (filing.case_name if filing else None, same_defect)
+
+    monkeypatch.setattr(fc, "connection", lambda: _Conn())
+    monkeypatch.setattr(fc, "CourtListenerClient", _Client)
+    monkeypatch.setattr(fc, "_mark_checked", _fake_mark)
+
+    summary = fc.run_check_filings(dry_run=True)
+    assert "model_year" in seen_sql[0] and "is_multi_year" in seen_sql[0]
+    assert summary["matched"] == 2
+    # 2019: rejected by the year guard, treated as no match.
+    assert marked[1] == (None, False)
+    # 2025: same defect.
+    assert marked[2][0].startswith("Fehrmann") and marked[2][1] is True
+    # ALL_YEARS: attaches, vehicle-only.
+    assert marked[3][0].startswith("Fehrmann") and marked[3][1] is False
