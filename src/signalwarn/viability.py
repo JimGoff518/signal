@@ -208,3 +208,22 @@ def regenerate_memo_if_needed(cluster_id: int, force: bool = False) -> bool:
         except Exception as e:
             log.warning("jev_shadow failed for cluster %s: %s", cluster_id, e)
     return True
+
+
+def run_memo_pass(max_per_run: int | None = None) -> tuple[int, int]:
+    """Regenerate memos for candidates (highest score first), stopping once
+    `max_per_run` memos have actually been written. Skipped/failed candidates
+    don't count toward the cap. Returns (written, candidates_remaining)."""
+    candidates = memo_candidate_ids()
+    written = 0
+    processed = 0
+    for cid in candidates:
+        if max_per_run is not None and written >= max_per_run:
+            break
+        processed += 1
+        try:
+            if regenerate_memo_if_needed(cid):
+                written += 1
+        except Exception as e:  # noqa: BLE001
+            log.warning("memo for cluster %s failed: %s", cid, e)
+    return written, len(candidates) - processed

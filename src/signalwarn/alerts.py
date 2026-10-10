@@ -69,6 +69,13 @@ def send_daily_digest() -> None:
         _send(f"SIGNAL Daily Brief — {today}", body)
         return
 
+    cap = settings.digest_max_items
+    omitted = 0
+    if cap is not None and len(rows) > cap:
+        rows = sorted(rows, key=lambda r: r["score"] or 0, reverse=True)
+        omitted = len(rows) - cap
+        rows = rows[:cap]
+
     critical = [r for r in rows if r["classification"] == "CRITICAL"]
     hot = [r for r in rows if r["classification"] == "HOT"]
 
@@ -81,6 +88,10 @@ def send_daily_digest() -> None:
         body_parts.append(f"<h3>🟠 HOT ({len(hot)})</h3><ul>")
         body_parts.extend(f"<li>{_format_cluster_line(r)}</li>" for r in hot)
         body_parts.append("</ul>")
+    if omitted:
+        body_parts.append(
+            f"<p>+ {omitted} more CRITICAL/HOT cluster(s) omitted (digest shows top {cap} by score).</p>"
+        )
 
     _send(f"SIGNAL Daily Brief — {today}", "".join(body_parts))
 
