@@ -23,7 +23,7 @@ from signalwarn.alerts import send_daily_digest, send_death_alerts  # noqa: E402
 from signalwarn.config import settings  # noqa: E402
 from signalwarn.historical import rescore_all_clusters  # noqa: E402
 from signalwarn.ingestion import run_daily_ingestion  # noqa: E402
-from signalwarn.viability import memo_candidate_ids, regenerate_memo_if_needed  # noqa: E402
+from signalwarn.viability import run_memo_pass  # noqa: E402
 
 
 @click.command()
@@ -43,11 +43,11 @@ def main(lookback_days: int | None, skip_memos: bool, skip_emails: bool) -> None
     log.info("Rescored %s clusters (SOL window %s years)", n, settings.sol_years)
 
     if not skip_memos and settings.anthropic_api_key:
-        for cid in memo_candidate_ids():
-            try:
-                regenerate_memo_if_needed(cid)
-            except Exception as e:  # noqa: BLE001
-                log.warning("memo for cluster %s failed: %s", cid, e)
+        written, remaining = run_memo_pass(settings.memo_max_per_run)
+        log.info(
+            "Memos written: %s (cap %s); %s candidates remaining unprocessed",
+            written, settings.memo_max_per_run or "unlimited", remaining,
+        )
 
     if not skip_emails:
         try:
