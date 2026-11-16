@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -87,6 +87,21 @@ class Settings(BaseSettings):
         if self.signal_username and self.signal_password:
             return {self.signal_username: self.signal_password}
         return {}
+
+    # Spend/volume guards for the daily run. None (unset/empty) = unlimited.
+    memo_max_per_run: int | None = Field(
+        25, ge=1, description="Max viability memos written per ingestion run; empty = unlimited"
+    )
+    digest_max_items: int | None = Field(
+        10, ge=1, description="Max clusters listed in one daily digest; empty = unlimited"
+    )
+
+    @field_validator("memo_max_per_run", "digest_max_items", mode="before")
+    @classmethod
+    def _empty_cap_is_unlimited(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        return v
 
     log_level: str = Field("INFO")
     environment: str = Field("development")
