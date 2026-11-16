@@ -38,9 +38,16 @@ def _parse_date(raw: str | None) -> date | None:
     if not raw:
         return None
     raw = str(raw).strip()
-    # NHTSA returns ISO datetimes ("2024-09-15T00:00:00.000Z") on the JSON API
-    # and YYYYMMDD strings in the flat-file dump. Handle both.
-    for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d", "%Y%m%d"):
+    # NHTSA returns ISO datetimes ("2024-09-15T00:00:00.000Z") on the JSON API,
+    # MM/DD/YYYY on the live complaintsByVehicle endpoint, and YYYYMMDD in the
+    # flat-file dump. Handle all three.
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%d",
+        "%m/%d/%Y",
+        "%Y%m%d",
+    ):
         try:
             return datetime.strptime(raw, fmt).date()
         except ValueError:
@@ -68,6 +75,14 @@ def _record_to_complaint(record: dict) -> Complaint | None:
     make = record.get("make")
     model = record.get("model")
     year = _to_int(record.get("modelYear") or record.get("yearOfVehicle"))
+    # Live complaintsByVehicle nests make/model/year under products[] as
+    # productMake / productModel / productYear. Prefer top-level when present.
+    if not make or not model or not year:
+        products = record.get("products") or []
+        product = products[0] if products else {}
+        make = make or product.get("productMake")
+        model = model or product.get("productModel")
+        year = year or _to_int(product.get("productYear"))
     if not odi or not make or not model or not year:
         return None
     return Complaint(
@@ -112,6 +127,10 @@ class NHTSAClient:
             "/complaints/complaintsByVehicle",
             params={"make": make, "model": model, "modelYear": model_year},
         )
+        # Some high-volume combos return HTTP 400 with an empty results body;
+        # treat that as "no results" rather than an error.
+        if resp.status_code == 400 and not (resp.json() or {}).get("results"):
+            return []
         resp.raise_for_status()
         payload = resp.json() or {}
         results = payload.get("results") or []
