@@ -297,13 +297,17 @@ def names_defect(filing: Filing, component: str) -> bool:
 
 
 def find_class_action(client: CourtListenerClient, make: str, model: str,
-                      component: str) -> Filing | None:
+                      component: str, model_year: int | None = None) -> Filing | None:
     """Return the best plausible filing for (make, model, component), or None.
 
     Asks for several hits and returns the first that passes
     `is_plausible_filing` and the curated Scout corrections in
     `signalwarn.filing_corrections`, so a noisy top result or a known
     wrong-vehicle / wrong-track caption does not poison the cluster.
+
+    The search itself has no year. `model_year` (None for ALL_YEARS keys)
+    is checked per hit against a rule's allow_years, so a wrong-year hit is
+    skipped and the next plausible hit still gets a chance.
     """
     # Local import avoids a cycle: filing_corrections imports Filing from here.
     from signalwarn.filing_corrections import allowed_by_corrections
@@ -314,7 +318,9 @@ def find_class_action(client: CourtListenerClient, make: str, model: str,
     for filing in client.search(q, limit=5):
         if not is_plausible_filing(filing, make):
             continue
-        if not allowed_by_corrections(filing, make, model, component):
+        if not allowed_by_corrections(
+            filing, make, model, component, model_year=model_year
+        ):
             continue
         return filing
     return None
